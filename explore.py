@@ -29,3 +29,4 @@ def create_predictors():
             logger.debug("Processed {} images".format(counter))
 
     return predictors
+
