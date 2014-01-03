@@ -5,6 +5,8 @@ Classes for Galaxy Zoo
 
 from scipy import misc
 from skimage import color
+import numpy as np
+from matplotlib import pyplot
 
 
 class Submission(object):
@@ -48,11 +50,39 @@ class RawImage(object):
         """
         Given a file name, load the ndarray
         """
-        self.data = misc.imread(filename)
+        self._original_data = misc.imread(filename)
+        self.data = self._original_data.copy()
         self.gid = filename[0:6]
+        self.responses = np.zeros(37)
 
-    def crop(self):
-        pass
+    def revert(self):
+        """
+        Reverts to original state
+        """
+        self.data = self._original_data.copy()
+
+    def crop(self, size):
+        """
+        Crops the image from the center into a square with sides of size
+        """
+        center = self.data.shape[0] / 2
+        dim = size / 2
+        cropmin = center - dim
+        cropmax = center + dim
+        self.data = self.data[cropmin:cropmax, cropmin:cropmax]
 
     def grayscale(self):
-        self.data = color.rgb2gray(self.data).flatten()
+        # Faster than the skimage.color.rgb2gray
+        self.data = 0.2125 * self.data[:, :, 0] + 0.7154 * self.data[:, :, 1] + 0.0721 * self.data[:, :, 2]
+
+    def flatten(self):
+        self.data = self.data.flatten()
+
+    def show(self):
+        pyplot.imshow(self.data)
+        pyplot.show()
+
+    @property
+    def average_intensity(self):
+        return self.data.mean()
+
