@@ -60,6 +60,7 @@ class RawImage(object):
         Reverts to original state
         """
         self.data = self._original_data.copy()
+        return self
 
     def crop(self, size):
         """
@@ -70,18 +71,21 @@ class RawImage(object):
         cropmin = center - dim
         cropmax = center + dim
         self.data = self.data[cropmin:cropmax, cropmin:cropmax]
+        return self
 
     def grayscale(self):
         # Faster than the skimage.color.rgb2gray
         # ...but apparently wrong
         # self.data = (0.2125 * self.data[:, :, 0]) + (0.7154 * self.data[:, :, 1]) + (0.0721 * self.data[:, :, 2])
         self.data = color.rgb2gray(self.data)
+        return self
 
     def flatten(self):
         self.data = self.data.flatten()
+        return self
 
-    def show(self):
-        pyplot.imshow(self.data, cmap=pyplot.cm.gray)
+    def show(self, *args, **kwargs):
+        pyplot.imshow(self.data, **kwargs)
         pyplot.show()
 
     @property
