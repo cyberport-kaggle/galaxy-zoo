@@ -3,10 +3,12 @@ Classes for Galaxy Zoo
 """
 
 
+from __future__ import division
 from scipy import misc
 from skimage import color
 import numpy as np
 from matplotlib import pyplot
+from constants import *
 
 
 class Submission(object):
@@ -66,8 +68,8 @@ class RawImage(object):
         """
         Crops the image from the center into a square with sides of size
         """
-        center = self.data.shape[0] / 2
-        dim = size / 2
+        center = int(self.data.shape[0] / 2)
+        dim = int(size / 2)
         cropmin = center - dim
         cropmax = center + dim
         self.data = self.data[cropmin:cropmax, cropmin:cropmax]
@@ -89,6 +91,33 @@ class RawImage(object):
         pyplot.show()
 
     @property
+    def central_pixel(self):
+        """
+        Gets central pixel.  If data is 2D, then it's a number, otherwise it's an numpy array
+        """
+        width = self.data.shape[1]
+        height = self.data.shape[0]
+        central_coord = (int(height / 2), int(width / 2))
+        return self.data[central_coord[0], central_coord[1]]
+
+    @property
     def average_intensity(self):
         return self.data.mean()
 
+
+def get_training_filenames(training_data=None):
+    """
+    Gets the list of training file names in order of the solutions file
+    Returns a list
+
+    Alternatively, if you've already loaded the training data, you can pass it in to prevent loading it twice
+    """
+    solution = training_data if training_data is not None else get_training_data()
+    assert solution.shape == (N_TRAIN, 38), "Training data dimensions incorrect: was {}, expected {}".format(solution.shape, (N_TRAIN, 37))
+    return map(lambda x: str(int(x)) + '.jpg', list(solution[:, 0]))
+
+
+def get_training_data():
+    solutions_file = 'data/solutions_training.csv'
+    solution = np.loadtxt(solutions_file, delimiter=',', skiprows=1)
+    return solution
