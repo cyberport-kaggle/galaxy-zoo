@@ -9,6 +9,7 @@ from skimage import color
 import numpy as np
 from matplotlib import pyplot
 from constants import *
+import os
 
 
 class Submission(object):
@@ -121,3 +122,18 @@ def get_training_data():
     solutions_file = 'data/solutions_training.csv'
     solution = np.loadtxt(solutions_file, delimiter=',', skiprows=1)
     return solution
+
+
+def rmse(first, second):
+    """
+    Calculates rmse for two numpy arrays
+    """
+    return np.sqrt(np.mean(np.square(first - second)))
+
+
+def get_test_ids():
+    """
+    Gets a (79971, 1) numpy array that can be attached for output
+    """
+    test_files = sorted(os.listdir(TEST_IMAGE_PATH))
+    return np.array(map(lambda x: int(x[0:6]), test_files), ndmin=2).T
