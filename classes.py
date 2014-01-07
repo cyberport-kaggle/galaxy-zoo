@@ -10,26 +10,51 @@ import numpy as np
 from matplotlib import pyplot
 from constants import *
 import os
+from constants import N_TEST
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 class Submission(object):
     """
-    Wrapper for a submission dataset
+    Utility function that takes care of some common tasks relating to submissiosn files
     """
-    def __init__(self):
-        pass
+    submission_format = ['%i'] + ['%.10f' for x in range(37)]
 
-    def from_file(self, filename):
+    def __init__(self, data):
+        """
+        Initialize with the (N_TEST, 37) or (N_TEST, 38) ndarray
+        If there are 38 columns, then we expect the first column to be the Galaxy Ids
+        """
+        if data.shape == (N_TEST, 38):
+            # Strip out the rownames and save them separately
+            self.row_names = data[:, 0:1]  # don't flatten to 1d array
+            self.data = data[:, 1:]
+        elif data.shape == (N_TEST, 37):
+            # No colnames, so assume that the colnames are the test ids sorted
+            self.data = data
+            self.row_names = get_test_ids()
+        else:
+            raise RuntimeError("Submission data must be of the shape ({}, 37), was: {}".format(N_TEST, data.shape))
+
+    @staticmethod
+    def from_file(filename):
         """
         Load a submission from a csv file
         """
-        pass
+        solution = np.loadtxt(filename, delimiter=',', skiprows=1)
+        return Submission(solution)
 
     def to_file(self, filename):
         """
         Output a submission to a file
         """
-        pass
+        predictions = np.concatenate((self.row_names, self.data), axis=1)
+        outpath = os.path.join(SUBMISSION_PATH, filename)
+        logger.info("Saving solutions to file {}".format(outpath))
+        np.savetxt(outpath, predictions, delimiter=',', header=SUBMISSION_HEADER, fmt=self.submission_format, comments="")
 
     def check_count(self):
         """

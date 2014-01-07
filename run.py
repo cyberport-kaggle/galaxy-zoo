@@ -34,12 +34,8 @@ def train_set_average_benchmark(outfile="sub_average_benchmark_000.csv"):
     rmse = classes.rmse(train_solution, training_data)
     logger.info("In sample RMSE: {}".format(rmse))
 
-    test_ids = classes.get_test_ids()
-    solution = np.tile(solutions, (N_TEST, 1))
-    predictions = np.concatenate((test_ids, solution), axis=1)
-    outpath = os.path.join(SUBMISSION_PATH, outfile)
-    submission_format = ['%i'] + ['%.10f' for x in range(37)]
-    np.savetxt(outpath, predictions, delimiter=',', header=SUBMISSION_HEADER, fmt=submission_format, comments="")
+    solution = classes.Submission(np.tile(solutions, (N_TEST, 1)))
+    solution.to_file(outfile)
 
     end_time = time.clock()
     logger.info("Model completed in {}".format(end_time - start_time))
@@ -109,12 +105,10 @@ def central_pixel_benchmark(outfile="sub_central_pixel_001.csv"):
     test_predictors = get_central_pixel_predictors(test_files, False)
     test_clusters = estimator.predict(test_predictors)
     test_averages = average_responses[test_clusters]
-    predictions = np.concatenate((classes.get_test_ids(), test_averages), axis=1)
+    predictions = classes.Submission(test_averages)
 
-    outpath = os.path.join(SUBMISSION_PATH, outfile)
-    logger.info("Writing submission to file {}".format(outpath))
-    submission_format = ['%i'] + ['%.10f' for x in range(37)]
-    np.savetxt(outpath, predictions, delimiter=',', header=SUBMISSION_HEADER, fmt=submission_format, comments="")
+    # Write to file
+    predictions.to_file(outfile)
 
     end_time = time.clock()
     logger.info("Model completed in {}".format(end_time - start_time))
