@@ -32,7 +32,6 @@ def train_set_average_benchmark(outfile="sub_average_benchmark_000.csv"):
     # Calculate an RMSE
     train_solution = np.tile(solutions, (N_TRAIN, 1))
     rmse = classes.rmse(train_solution, training_data)
-    logger.info("In sample RMSE: {}".format(rmse))
 
     solution = classes.Submission(np.tile(solutions, (N_TEST, 1)))
     solution.to_file(outfile)
@@ -56,6 +55,64 @@ def get_central_pixel_predictors(file_list, training):
     return predictors
 
 
+class CentralPixelBenchmark(classes.BaseModel):
+    def build_train_predictors(self):
+        # Build the training data - load all of the images and extract the RGB values of the central pixel
+        # Resulting training dataset should be (70948, 3)
+        self.train_y = classes.get_training_data()
+        file_list = classes.get_training_filenames(self.train_y)
+        self.predictors = get_central_pixel_predictors(file_list, True)
+
+    def fit_estimator(self):
+        # Fit a k-means clustering estimator
+        # We use 37 centers initially because there are 37 classes
+        # Seems like the sample submission used 6 clusters
+        start_time = time.clock()
+        logger.info("Fitting kmeans estimator")
+        self.estimator = KMeans(init='k-means++', n_clusters=37)
+        self.estimator.fit(self.predictors)
+        logger.info("Finished fitting model in {}".format(time.clock() - start_time))
+
+    def get_cluster_averages(self):
+        # Get the average response for each cluster in the training set
+        # This is a 37 x 37 array, one row for each cluster, and one column for each class
+        logger.info("Calculating cluster averages")
+        average_responses = np.zeros((37, 37))
+        for cluster in range(37):
+            idx = self.estimator.labels_ == cluster
+            responses = self.train_y[idx, 1:]
+            average_responses[cluster] = responses.mean(axis=0)
+        logger.info("Finished calculating cluster averages")
+        return average_responses
+
+    def predict_test(self, average_responses):
+        logger.info("Calculating predictions for test set")
+        # Now calculate the test set responses
+        test_files = sorted(os.listdir(TEST_IMAGE_PATH))
+        test_predictors = get_central_pixel_predictors(test_files, False)
+        test_clusters = self.estimator.predict(test_predictors)
+        test_averages = average_responses[test_clusters]
+        return test_averages
+
+    def execute(self):
+        self.build_train_predictors()
+
+        # Save the dataset for future use
+        data_filename = 'data/data_central_pixel_001.csv'
+        logger.info("Finished loading predictors, saving to file {}".format(data_filename))
+        np.savetxt(data_filename, self.predictors, delimiter=',', fmt="%i")
+
+        self.fit_estimator()
+
+        average_responses = self.get_cluster_averages()
+
+        # Assign cluster averages for the training set, to get an in sample RMSE
+        training_averages = average_responses[self.estimator.labels_]
+        rmse = classes.rmse(training_averages, self.train_y[:, 1:])
+
+        return self.predict_test(average_responses)
+
+
 def central_pixel_benchmark(outfile="sub_central_pixel_001.csv"):
     """
     Tries to duplicate the central pixel benchmark, which is defined as:
@@ -63,52 +120,8 @@ def central_pixel_benchmark(outfile="sub_central_pixel_001.csv"):
     and then assigns the associated probability values to like-colored images in the test set.
     """
 
-    start_time = time.clock()
+    test_averages = CentralPixelBenchmark().run()
 
-    # Build the training data - load all of the images and extract the RGB values of the central pixel
-    # Resulting training dataset should be (70948, 3)
-    training_data = classes.get_training_data()
-    file_list = classes.get_training_filenames(training_data)
-    predictors = get_central_pixel_predictors(file_list, True)
-
-    # Save the dataset for future use
-    data_filename = 'data/data_central_pixel_001.csv'
-    logger.info("Finished loading predictors, saving to file {}".format(data_filename))
-    np.savetxt(data_filename, predictors, delimiter=',', fmt="%i")
-
-    # Fit a k-means clustering estimator
-    # We use 37 centers initially because there are 37 classes
-    # Seems like the sample submission used 6 clusters
-    logger.info("Fitting kmeans estimator")
-    estimator = KMeans(init='k-means++', n_clusters=37)
-    estimator.fit(predictors)
-    logger.info("Finished fitting model in {}".format(time.clock() - start_time))
-
-    # Get the average response for each cluster in the training set
-    # This is a 37 x 37 array, one row for each cluster, and one column for each class
-    logger.info("Calculating cluster averages")
-    average_responses = np.zeros((37, 37))
-    for cluster in range(37):
-        idx = estimator.labels_ == cluster
-        responses = training_data[idx, 1:]
-        average_responses[cluster] = responses.mean(axis=0)
-    logger.info("Finished calculating cluster averages")
-
-    # Assign cluster averages for the training set, to get an in sample RMSE
-    training_averages = average_responses[estimator.labels_]
-    rmse = classes.rmse(training_averages, training_data[:, 1:])
-    logger.info("In sample RMSE: {}".format(rmse))
-
-    logger.info("Calculating predictions for test set")
-    # Now calculate the test set responses
-    test_files = sorted(os.listdir(TEST_IMAGE_PATH))
-    test_predictors = get_central_pixel_predictors(test_files, False)
-    test_clusters = estimator.predict(test_predictors)
-    test_averages = average_responses[test_clusters]
     predictions = classes.Submission(test_averages)
-
     # Write to file
     predictions.to_file(outfile)
-
-    end_time = time.clock()
-    logger.info("Model completed in {}".format(end_time - start_time))

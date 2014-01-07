@@ -8,6 +8,7 @@ from scipy import misc
 from skimage import color
 import numpy as np
 from matplotlib import pyplot
+import time
 from constants import *
 import os
 from constants import N_TEST
@@ -131,6 +132,29 @@ class RawImage(object):
         return self.data.mean()
 
 
+class BaseModel(object):
+    """
+    Base model for training models.
+    Rationale for having a class structure for models is so that we can:
+      1) Do some standard utility things like timing
+      2) Easily vary our models.  For example, if we have a model, and we want to have a variant that uses slightly different
+         predictors, we can just subclass and override that part of the run function
+
+    Subclasses must implement execute(), which is called by run().
+    """
+    def execute(self):
+        raise NotImplementedError("Don't use the base class")
+
+    def run(self):
+        start_time = time.clock()
+
+        res = self.execute()
+
+        end_time = time.clock()
+        logger.info("Model completed in {}".format(end_time - start_time))
+        return res
+
+
 def get_training_filenames(training_data=None):
     """
     Gets the list of training file names in order of the solutions file
@@ -153,7 +177,9 @@ def rmse(first, second):
     """
     Calculates rmse for two numpy arrays
     """
-    return np.sqrt(np.mean(np.square(first - second)))
+    np_sqrt = np.sqrt(np.mean(np.square(first - second)))
+    logger.info("In sample RMSE: {}".format(rmse))
+    return rmse
 
 
 def get_test_ids():
