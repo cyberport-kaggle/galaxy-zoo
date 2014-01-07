@@ -19,6 +19,32 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def train_set_average_benchmark(outfile="sub_average_benchmark_000.csv"):
+    """
+    What should be the actual baseline.  Takes the training set solutions, averages them, and uses that as the
+    submission for every row in the test set
+    """
+    start_time = time.clock()
+    training_data = classes.get_training_data()[:, 1:]
+
+    solutions = np.mean(training_data, axis=0)
+
+    # Calculate an RMSE
+    train_solution = np.tile(solutions, (N_TRAIN, 1))
+    rmse = classes.rmse(train_solution, training_data)
+    logger.info("In sample RMSE: {}".format(rmse))
+
+    test_ids = classes.get_test_ids()
+    solution = np.tile(solutions, (N_TEST, 1))
+    predictions = np.concatenate((test_ids, solution), axis=1)
+    outpath = os.path.join(SUBMISSION_PATH, outfile)
+    submission_format = ['%i'] + ['%.10f' for x in range(37)]
+    np.savetxt(outpath, predictions, delimiter=',', header=SUBMISSION_HEADER, fmt=submission_format, comments="")
+
+    end_time = time.clock()
+    logger.info("Model completed in {}".format(end_time - start_time))
+
+
 def get_central_pixel_predictors(file_list, training):
     logger.info("Building predictors")
     dims = (N_TRAIN if training else N_TEST, 3)
