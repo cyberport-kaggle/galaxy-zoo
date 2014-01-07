@@ -177,9 +177,9 @@ def rmse(first, second):
     """
     Calculates rmse for two numpy arrays
     """
-    np_sqrt = np.sqrt(np.mean(np.square(first - second)))
-    logger.info("In sample RMSE: {}".format(rmse))
-    return rmse
+    res = np.sqrt(np.mean(np.square(first - second)))
+    logger.info("In sample RMSE: {}".format(res))
+    return res
 
 
 def get_test_ids():
