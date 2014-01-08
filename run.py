@@ -121,7 +121,6 @@ def central_pixel_benchmark(outfile="sub_central_pixel_001.csv"):
     """
 
     test_averages = CentralPixelBenchmark().run()
-
     predictions = classes.Submission(test_averages)
     # Write to file
     predictions.to_file(outfile)

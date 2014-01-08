@@ -104,9 +104,7 @@ class RawImage(object):
 
     def grayscale(self):
         # Faster than the skimage.color.rgb2gray
-        # ...but apparently wrong
-        # self.data = (0.2125 * self.data[:, :, 0]) + (0.7154 * self.data[:, :, 1]) + (0.0721 * self.data[:, :, 2])
-        self.data = color.rgb2gray(self.data)
+        self.data = ((0.2125 * self.data[:, :, 0]) + (0.7154 * self.data[:, :, 1]) + (0.0721 * self.data[:, :, 2])) / 255
         return self
 
     def flatten(self):
