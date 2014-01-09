@@ -46,13 +46,13 @@ class CentralPixelBenchmark(classes.BaseModel):
     def build_features(self, files, training=True):
         return self.do_for_each_image(files, self.process_image, 3, training)
 
+    @classes.cache_to_file('data/data_central_pixel_001.csv', '%i')
     def build_train_predictors(self):
         # Build the training data - load all of the images and extract the RGB values of the central pixel
         # Resulting training dataset should be (70948, 3)
         logger.info("Building predictors")
-        self.train_y = classes.get_training_data()
         file_list = classes.get_training_filenames(self.train_y)
-        self.predictors = self.build_features(file_list, True)
+        return self.build_features(file_list, True)
 
     def fit_estimator(self):
         # Fit a k-means clustering estimator
@@ -76,26 +76,25 @@ class CentralPixelBenchmark(classes.BaseModel):
         logger.info("Finished calculating cluster averages")
         return average_responses
 
+    @classes.cache_to_file('data/data_central_pixel_test_001.csv', '%i')
+    def build_test_predictors(self):
+        test_files = sorted(os.listdir(TEST_IMAGE_PATH))
+        test_predictors = self.build_features(test_files, False)
+        return test_predictors
+
     def predict_test(self, average_responses):
         logger.info("Calculating predictions for test set")
 
         # Now calculate the test set responses
-        test_files = sorted(os.listdir(TEST_IMAGE_PATH))
-        test_predictors = self.build_features(test_files, False)
+        test_predictors = self.build_test_predictors()
         test_clusters = self.estimator.predict(test_predictors)
         test_averages = average_responses[test_clusters]
         return test_averages
 
     def execute(self):
-        self.build_train_predictors()
-
-        # Save the dataset for future use
-        data_filename = 'data/data_central_pixel_001.csv'
-        logger.info("Finished loading predictors, saving to file {}".format(data_filename))
-        np.savetxt(data_filename, self.predictors, delimiter=',', fmt="%i")
-
+        self.train_y = classes.get_training_data()
+        self.predictors = self.build_train_predictors()
         self.fit_estimator()
-
         average_responses = self.get_cluster_averages()
 
         # Assign cluster averages for the training set, to get an in sample RMSE
@@ -119,7 +118,8 @@ def central_pixel_benchmark(outfile="sub_central_pixel_001.csv"):
 
 
 class RandomForestModel(classes.BaseModel):
-    train_predictors_file = 'data/data_neural_network_001.csv'
+    train_predictors_file = 'data/data_neural_network_train_001.csv'
+    test_predictors_file = 'data/data_neural_network_test_001.csv'
 
     @staticmethod
     def process_image(img):
@@ -132,18 +132,15 @@ class RandomForestModel(classes.BaseModel):
         predictors = self.do_for_each_image(files, self.process_image, 75, training)
         return predictors
 
+    @classes.cache_to_file(train_predictors_file)
     def build_train_predictors(self):
-        self.train_y = classes.get_training_data()
-        if os.path.exists(self.train_predictors_file):
-            logger.info("Input data file already exists, loading from file")
-            self.train_x = np.loadtxt(self.train_predictors_file, delimiter=',')
-        else:
-            file_list = classes.get_training_filenames(self.train_y)
-            self.train_x = self.build_features(file_list, True)
+        file_list = classes.get_training_filenames(self.train_y)
+        return self.build_features(file_list, True)
 
+    @classes.cache_to_file(test_predictors_file)
     def build_test_predictors(self):
         test_files = sorted(os.listdir(TEST_IMAGE_PATH))
-        self.test_x = self.build_features(test_files, False)
+        return self.build_features(test_files, False)
 
     def get_estimator(self):
         rbm = BernoulliRBM(random_state=0, verbose=True)
@@ -172,7 +169,8 @@ class RandomForestModel(classes.BaseModel):
         np.savetxt(self.train_predictors_file, self.train_x, delimiter=',', fmt="%i")
 
     def execute(self):
-        self.build_train_predictors()
+        self.train_y = classes.get_training_data()
+        self.train_x = self.build_train_predictors()
 
         self.save_train_predictors()
 
@@ -182,7 +180,7 @@ class RandomForestModel(classes.BaseModel):
         training_predict = self.estimator.predict(self.train_x)
         rmse = classes.rmse(training_predict, self.train_y[:, 1:2])
 
-        self.build_test_predictors()
+        self.test_x = self.build_test_predictors()
         return self.predict_test()
 
 

@@ -4,6 +4,7 @@ Classes for Galaxy Zoo
 
 
 from __future__ import division
+from functools import wraps
 from scipy import misc
 from skimage import color
 import numpy as np
@@ -238,14 +239,22 @@ def get_test_ids():
     return np.array(map(lambda x: int(x[0:6]), test_files), ndmin=2).T
 
 
-def cache_to_file(func, filename, fmt):
-    def cached_func(*args, **kwargs):
-        if os.path.exists(filename):
-            logger.info("Result of {} already exists, loading from file {}".format(func.__name__, filename))
-            res = np.loadtxt(filename, delimiter=',')
-        else:
-            res = func(*args, **kwargs)
-            logger.info("Caching results of {} to {}".format(func.__name__, filename))
-            np.savetxt(filename, res, delimiter=',', fmt=fmt)
-        return res
-    return cached_func
+def cache_to_file(filename, fmt='%.18e'):
+    """
+    Decorator for wrapping methods so that the result of those methods are written to a file and cached
+    If the file exists, then the method will instead read from the file.
+    Any function that is wrapped by this shouldn't have side effects (e.g. set properties on the instance)
+    """
+    def cache_decorator(func):
+        @wraps(func)
+        def cached_func(*args, **kwargs):
+            if os.path.exists(filename):
+                logger.info("Result of {} already exists, loading from file {}".format(func.__name__, filename))
+                res = np.loadtxt(filename, delimiter=',')
+            else:
+                res = func(*args, **kwargs)
+                logger.info("Caching results of {} to {}".format(func.__name__, filename))
+                np.savetxt(filename, res, delimiter=',', fmt=fmt)
+            return res
+        return cached_func
+    return cache_decorator
