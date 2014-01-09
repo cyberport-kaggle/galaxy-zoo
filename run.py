@@ -2,9 +2,8 @@
 Run scripts for individual models in Galaxy Zoo
 """
 import os
-from sklearn import linear_model
 import time
-from sklearn.neural_network import BernoulliRBM
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.pipeline import Pipeline
 
 import classes
@@ -118,8 +117,8 @@ def central_pixel_benchmark(outfile="sub_central_pixel_001.csv"):
 
 
 class RandomForestModel(classes.BaseModel):
-    train_predictors_file = 'data/data_neural_network_train_001.csv'
-    test_predictors_file = 'data/data_neural_network_test_001.csv'
+    train_predictors_file = 'data/data_random_forest_train_001.csv'
+    test_predictors_file = 'data/data_random_forest_test_001.csv'
 
     @staticmethod
     def process_image(img):
@@ -143,53 +142,40 @@ class RandomForestModel(classes.BaseModel):
         return self.build_features(test_files, False)
 
     def get_estimator(self):
-        rbm = BernoulliRBM(random_state=0, verbose=True)
-        logistic = linear_model.LogisticRegression()
-        classifier = Pipeline(steps=[('rbm', rbm), ('logistic', logistic)])
-        rbm.learning_rate = 0.06
-        rbm.n_iter = 20
-        rbm.n_components = 20
-        logistic.C = 6000.0
+        classifier = RandomForestClassifier(random_state=0, verbose=1)
         return classifier
 
     def fit_estimator(self):
         start_time = time.clock()
-        logger.info("Fitting neural network estimator")
+        logger.info("Fitting random forest estimator")
         self.estimator = self.get_estimator()
-        self.estimator.fit(self.train_x, self.train_y[:, 0])  # Logistic will only take one class
+        self.estimator.fit(self.train_x, self.train_y)
         logger.info("Finished fitting model in {}".format(time.clock() - start_time))
 
     def predict_test(self):
         self.test_y = self.estimator.predict(self.test_x)
         return self.test_y
 
-    def save_train_predictors(self):
-        # Save the dataset for future use
-        logger.info("Finished loading predictors, saving to file {}".format(self.train_predictors_file))
-        np.savetxt(self.train_predictors_file, self.train_x, delimiter=',', fmt="%i")
-
     def execute(self):
         self.train_y = classes.get_training_data()
         self.train_x = self.build_train_predictors()
-
-        self.save_train_predictors()
-
         self.fit_estimator()
 
         # Get an in sample RMSE
         training_predict = self.estimator.predict(self.train_x)
-        rmse = classes.rmse(training_predict, self.train_y[:, 1:2])
+        rmse = classes.rmse(training_predict, self.train_y)
 
         self.test_x = self.build_test_predictors()
         return self.predict_test()
 
 
-def neural_network_001(outfile="sub_neural_network_001.csv"):
+def random_forest_001(outfile="sub_random_forest_001.csv"):
     """
     First attempt at implementing a neural network.
     Uses a sample of central pixels in RGB space to feed in as inputs to the neural network
     Model is not tuned or CV'd, which are to be implemented in later models.
     """
-    test_predictions = NeuralNetworkModel().run()
-    output = classes.Submission(test_predictions)
+    model = RandomForestModel()
+    predictions = model.run()
+    output = classes.Submission(predictions)
     output.to_file(outfile)
