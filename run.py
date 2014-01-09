@@ -14,21 +14,7 @@ from constants import *
 from sklearn.cluster import KMeans
 
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                                  datefmt='%Y-%m-%d %H:%M:%S')
-# Log to file
-logfile = logging.FileHandler('run.log')
-logfile.setLevel(logging.DEBUG)
-logfile.setFormatter(log_formatter)
-# Log to console
-logstream = logging.StreamHandler()
-logstream.setLevel(logging.INFO)
-logstream.setFormatter(log_formatter)
-
-logger.addHandler(logfile)
-logger.addHandler(logstream)
+logger = logging.getLogger('galaxy')
 
 
 def train_set_average_benchmark(outfile="sub_average_benchmark_000.csv"):
@@ -52,28 +38,21 @@ def train_set_average_benchmark(outfile="sub_average_benchmark_000.csv"):
     logger.info("Model completed in {}".format(end_time - start_time))
 
 
-def get_central_pixel_predictors(file_list, training):
-    logger.info("Building predictors")
-    dims = (N_TRAIN if training else N_TEST, 3)
-    predictors = np.zeros(dims)
-    counter = 0
-    for row, f in enumerate(file_list):
-        filepath = TRAIN_IMAGE_PATH if training else TEST_IMAGE_PATH
-        image = classes.RawImage(os.path.join(filepath, f))
-        predictors[row] = image.central_pixel.copy()
-        counter += 1
-        if counter % 1000 == 0:
-            logger.info("Processed {} images".format(counter))
-    return predictors
-
-
 class CentralPixelBenchmark(classes.BaseModel):
+    @staticmethod
+    def process_image(img):
+        return img.central_pixel.copy()
+
+    def build_features(self, files, training=True):
+        return self.do_for_each_image(files, self.process_image, 3, training)
+
     def build_train_predictors(self):
         # Build the training data - load all of the images and extract the RGB values of the central pixel
         # Resulting training dataset should be (70948, 3)
+        logger.info("Building predictors")
         self.train_y = classes.get_training_data()
         file_list = classes.get_training_filenames(self.train_y)
-        self.predictors = get_central_pixel_predictors(file_list, True)
+        self.predictors = self.build_features(file_list, True)
 
     def fit_estimator(self):
         # Fit a k-means clustering estimator
@@ -99,9 +78,10 @@ class CentralPixelBenchmark(classes.BaseModel):
 
     def predict_test(self, average_responses):
         logger.info("Calculating predictions for test set")
+
         # Now calculate the test set responses
         test_files = sorted(os.listdir(TEST_IMAGE_PATH))
-        test_predictors = get_central_pixel_predictors(test_files, False)
+        test_predictors = self.build_features(test_files, False)
         test_clusters = self.estimator.predict(test_predictors)
         test_averages = average_responses[test_clusters]
         return test_averages
@@ -138,26 +118,18 @@ def central_pixel_benchmark(outfile="sub_central_pixel_001.csv"):
     predictions.to_file(outfile)
 
 
-class NeuralNetworkModel(classes.BaseModel):
+class RandomForestModel(classes.BaseModel):
     train_predictors_file = 'data/data_neural_network_001.csv'
 
+    @staticmethod
+    def process_image(img):
+        return img.grid_sample(20, 2).flatten().astype('float64') / 255
+
     def build_features(self, files, training=True):
-        # Can parameterize this by having arguments:
-        #   - feature_generator_function
-        #   - n_features
-        # So once an image is loaded, it gets passed to the feature_generator_function,
-        # And the result of this function is added to the predictors array with n_features columns
+        #  Sample a 5x5 grid of pixels.  Totals 75 features: 5x5x3
         logger.info("Building predictors")
-        dims = (N_TRAIN if training else N_TEST, 75)
-        predictors = np.zeros(dims)
-        counter = 0
-        for row, f in enumerate(files):
-            filepath = TRAIN_IMAGE_PATH if training else TEST_IMAGE_PATH
-            image = classes.RawImage(os.path.join(filepath, f))
-            predictors[row] = image.grid_sample(20, 2).flatten().astype('float64') / 255
-            counter += 1
-            if counter % 1000 == 0:
-                logger.info("Processed {} images".format(counter))
+
+        predictors = self.do_for_each_image(files, self.process_image, 75, training)
         return predictors
 
     def build_train_predictors(self):

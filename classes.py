@@ -15,7 +15,21 @@ from constants import N_TEST
 import logging
 
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('galaxy')
+logger.setLevel(logging.DEBUG)
+log_formatter = logging.Formatter('%(asctime)s - %(module)s - %(levelname)s - %(message)s',
+                                  datefmt='%Y-%m-%d %H:%M:%S')
+# Log to file
+logfile = logging.FileHandler('run.log')
+logfile.setLevel(logging.DEBUG)
+logfile.setFormatter(log_formatter)
+# Log to console
+logstream = logging.StreamHandler()
+logstream.setLevel(logging.INFO)
+logstream.setFormatter(log_formatter)
+
+logger.addHandler(logfile)
+logger.addHandler(logstream)
 
 
 class Submission(object):
@@ -159,6 +173,23 @@ class BaseModel(object):
 
     Subclasses must implement execute(), which is called by run().
     """
+    def do_for_each_image(self, files, func, n_features, training):
+        """
+        Function that iterates over a list of files, applying func to the image indicated by that function.
+        Returns an (n_samples, n_features) ndarray
+        """
+        dims = (N_TRAIN if training else N_TEST, n_features)
+        predictors = np.zeros(dims)
+        counter = 0
+        for row, f in enumerate(files):
+            filepath = TRAIN_IMAGE_PATH if training else TEST_IMAGE_PATH
+            image = RawImage(os.path.join(filepath, f))
+            predictors[row] = func(image)
+            counter += 1
+            if counter % 1000 == 0:
+                logger.info("Processed {} images".format(counter))
+        return predictors
+
     def execute(self):
         raise NotImplementedError("Don't use the base class")
 
@@ -205,3 +236,16 @@ def get_test_ids():
     """
     test_files = sorted(os.listdir(TEST_IMAGE_PATH))
     return np.array(map(lambda x: int(x[0:6]), test_files), ndmin=2).T
+
+
+def cache_to_file(func, filename, fmt):
+    def cached_func(*args, **kwargs):
+        if os.path.exists(filename):
+            logger.info("Result of {} already exists, loading from file {}".format(func.__name__, filename))
+            res = np.loadtxt(filename, delimiter=',')
+        else:
+            res = func(*args, **kwargs)
+            logger.info("Caching results of {} to {}".format(func.__name__, filename))
+            np.savetxt(filename, res, delimiter=',', fmt=fmt)
+        return res
+    return cached_func
