@@ -111,18 +111,37 @@ class RawImage(object):
         self.data = self.data.flatten()
         return self
 
+    def grid_sample(self, step_size, steps):
+        """
+        Samples the pixels from the center in steps.  Total pixels return will be
+        """
+        # Get a list of the coordinates of the pixels we want to extract
+        central_coord = self.central_pixel_coordinates
+        top_left = (central_coord[0] - (steps * step_size), central_coord[1] - (steps * step_size))
+        bottom_right = (central_coord[0] + (steps * step_size), central_coord[1] + (steps * step_size))
+        min_x = top_left[0]
+        max_x = bottom_right[0] + 1
+        min_y = top_left[1]
+        max_y = bottom_right[1] + 1
+        return self.data[min_x:max_x:step_size, min_y:max_y:step_size].copy()
+
     def show(self, *args, **kwargs):
         pyplot.imshow(self.data, **kwargs)
         pyplot.show()
+
+    @property
+    def central_pixel_coordinates(self):
+        width = self.data.shape[1]
+        height = self.data.shape[0]
+        central_coord = (int(height / 2), int(width / 2))
+        return central_coord
 
     @property
     def central_pixel(self):
         """
         Gets central pixel.  If data is 2D, then it's a number, otherwise it's an numpy array
         """
-        width = self.data.shape[1]
-        height = self.data.shape[0]
-        central_coord = (int(height / 2), int(width / 2))
+        central_coord = self.central_pixel_coordinates
         return self.data[central_coord[0], central_coord[1]]
 
     @property

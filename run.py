@@ -136,24 +136,28 @@ def central_pixel_benchmark(outfile="sub_central_pixel_001.csv"):
 
 class NeuralNetworkModel(classes.BaseModel):
     def build_features(self, files, training=True):
-            logger.info("Building predictors")
-            dims = (N_TRAIN if training else N_TEST, 3)
-            predictors = np.zeros(dims)
-            counter = 0
-            for row, f in enumerate(files):
-                filepath = TRAIN_IMAGE_PATH if training else TEST_IMAGE_PATH
-                image = classes.RawImage(os.path.join(filepath, f))
-                predictors[row] = image.central_pixel.copy()
-                counter += 1
-                if counter % 1000 == 0:
-                    logger.info("Processed {} images".format(counter))
-            return predictors
+        # Can parameterize this by having arguments:
+        #   - feature_generator_function
+        #   - n_features
+        # So once an image is loaded, it gets passed to the feature_generator_function,
+        # And the result of this function is added to the predictors array with n_features columns
+        logger.info("Building predictors")
+        dims = (N_TRAIN if training else N_TEST, 75)
+        predictors = np.zeros(dims)
+        counter = 0
+        for row, f in enumerate(files):
+            filepath = TRAIN_IMAGE_PATH if training else TEST_IMAGE_PATH
+            image = classes.RawImage(os.path.join(filepath, f))
+            predictors[row] = image.grid_sample(20, 2).flatten().astype('float64') / 255
+            counter += 1
+            if counter % 1000 == 0:
+                logger.info("Processed {} images".format(counter))
+        return predictors
 
     def build_train_predictors(self):
         self.train_y = classes.get_training_data()
         file_list = classes.get_training_filenames(self.train_y)
-        self.predictors = get_central_pixel_predictors(file_list, True)
-
+        self.train_x = get_central_pixel_predictors(file_list, True)
 
     def execute(self):
-        X_train = self.build_train_predictors()
+        self.build_train_predictors()
