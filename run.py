@@ -2,7 +2,10 @@
 Run scripts for individual models in Galaxy Zoo
 """
 import os
+from sklearn import linear_model
 import time
+from sklearn.neural_network import BernoulliRBM
+from sklearn.pipeline import Pipeline
 
 import classes
 import numpy as np
@@ -12,6 +15,7 @@ from sklearn.cluster import KMeans
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                                   datefmt='%Y-%m-%d %H:%M:%S')
 # Log to file
@@ -135,6 +139,8 @@ def central_pixel_benchmark(outfile="sub_central_pixel_001.csv"):
 
 
 class NeuralNetworkModel(classes.BaseModel):
+    train_predictors_file = 'data/data_neural_network_001.csv'
+
     def build_features(self, files, training=True):
         # Can parameterize this by having arguments:
         #   - feature_generator_function
@@ -156,8 +162,64 @@ class NeuralNetworkModel(classes.BaseModel):
 
     def build_train_predictors(self):
         self.train_y = classes.get_training_data()
-        file_list = classes.get_training_filenames(self.train_y)
-        self.train_x = get_central_pixel_predictors(file_list, True)
+        if os.path.exists(self.train_predictors_file):
+            logger.info("Input data file already exists, loading from file")
+            self.train_x = np.loadtxt(self.train_predictors_file, delimiter=',')
+        else:
+            file_list = classes.get_training_filenames(self.train_y)
+            self.train_x = self.build_features(file_list, True)
+
+    def build_test_predictors(self):
+        test_files = sorted(os.listdir(TEST_IMAGE_PATH))
+        self.test_x = self.build_features(test_files, False)
+
+    def get_estimator(self):
+        rbm = BernoulliRBM(random_state=0, verbose=True)
+        logistic = linear_model.LogisticRegression()
+        classifier = Pipeline(steps=[('rbm', rbm), ('logistic', logistic)])
+        rbm.learning_rate = 0.06
+        rbm.n_iter = 20
+        rbm.n_components = 20
+        logistic.C = 6000.0
+        return classifier
+
+    def fit_estimator(self):
+        start_time = time.clock()
+        logger.info("Fitting neural network estimator")
+        self.estimator = self.get_estimator()
+        self.estimator.fit(self.train_x, self.train_y[:, 0])  # Logistic will only take one class
+        logger.info("Finished fitting model in {}".format(time.clock() - start_time))
+
+    def predict_test(self):
+        self.test_y = self.estimator.predict(self.test_x)
+        return self.test_y
+
+    def save_train_predictors(self):
+        # Save the dataset for future use
+        logger.info("Finished loading predictors, saving to file {}".format(self.train_predictors_file))
+        np.savetxt(self.train_predictors_file, self.train_x, delimiter=',', fmt="%i")
 
     def execute(self):
         self.build_train_predictors()
+
+        self.save_train_predictors()
+
+        self.fit_estimator()
+
+        # Get an in sample RMSE
+        training_predict = self.estimator.predict(self.train_x)
+        rmse = classes.rmse(training_predict, self.train_y[:, 1:2])
+
+        self.build_test_predictors()
+        return self.predict_test()
+
+
+def neural_network_001(outfile="sub_neural_network_001.csv"):
+    """
+    First attempt at implementing a neural network.
+    Uses a sample of central pixels in RGB space to feed in as inputs to the neural network
+    Model is not tuned or CV'd, which are to be implemented in later models.
+    """
+    test_predictions = NeuralNetworkModel().run()
+    output = classes.Submission(test_predictions)
+    output.to_file(outfile)
