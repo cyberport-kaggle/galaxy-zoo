@@ -11,12 +11,20 @@ from constants import *
 from sklearn.cluster import KMeans
 
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
 logger = logging.getLogger(__name__)
+log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                                  datefmt='%Y-%m-%d %H:%M:%S')
+# Log to file
+logfile = logging.FileHandler('run.log')
+logfile.setLevel(logging.DEBUG)
+logfile.setFormatter(log_formatter)
+# Log to console
+logstream = logging.StreamHandler()
+logstream.setLevel(logging.INFO)
+logstream.setFormatter(log_formatter)
+
+logger.addHandler(logfile)
+logger.addHandler(logstream)
 
 
 def train_set_average_benchmark(outfile="sub_average_benchmark_000.csv"):
@@ -124,3 +132,28 @@ def central_pixel_benchmark(outfile="sub_central_pixel_001.csv"):
     predictions = classes.Submission(test_averages)
     # Write to file
     predictions.to_file(outfile)
+
+
+class NeuralNetworkModel(classes.BaseModel):
+    def build_features(self, files, training=True):
+            logger.info("Building predictors")
+            dims = (N_TRAIN if training else N_TEST, 3)
+            predictors = np.zeros(dims)
+            counter = 0
+            for row, f in enumerate(files):
+                filepath = TRAIN_IMAGE_PATH if training else TEST_IMAGE_PATH
+                image = classes.RawImage(os.path.join(filepath, f))
+                predictors[row] = image.central_pixel.copy()
+                counter += 1
+                if counter % 1000 == 0:
+                    logger.info("Processed {} images".format(counter))
+            return predictors
+
+    def build_train_predictors(self):
+        self.train_y = classes.get_training_data()
+        file_list = classes.get_training_filenames(self.train_y)
+        self.predictors = get_central_pixel_predictors(file_list, True)
+
+
+    def execute(self):
+        X_train = self.build_train_predictors()
