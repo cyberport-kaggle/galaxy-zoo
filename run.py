@@ -11,7 +11,12 @@ import numpy as np
 import logging
 from constants import *
 from sklearn.cluster import KMeans
-
+from IPython import embed
+from sklearn.decomposition import RandomizedPCA
+from sklearn.linear_model import Ridge, RidgeCV
+from sklearn.pipeline import Pipeline
+from sklearn.grid_search import GridSearchCV, RandomizedSearchCV
+from sklearn.metrics import mean_squared_error
 
 logger = logging.getLogger('galaxy')
 
@@ -179,3 +184,40 @@ def random_forest_001(outfile="sub_random_forest_001.csv"):
     predictions = model.run()
     output = classes.Submission(predictions)
     output.to_file(outfile)
+
+
+def ridge_regression():
+    # read train Y
+    train_y = classes.get_training_data()
+
+    # randomly sample 10% Y and select the gid's
+    n = 7000
+    crop_size = 150
+
+    train_y = train_y[np.random.randint(train_y.shape[0], size=n), :]
+    train_x = np.zeros((n, crop_size ** 2))
+
+    # load the training images and crop at the same time
+    for row, gid in enumerate(train_y[:, 0]):
+        img = classes.RawImage('data/images_training_rev1/' + str(int(gid)) + '.jpg')
+        img.grayscale()
+        img.crop(crop_size)
+        img.flatten()
+        train_x[row] = img.data
+        print row
+
+    pca = RandomizedPCA(1000, whiten=True)
+    rgn = Ridge()
+
+    pca_ridge = Pipeline([('pca', pca),
+                          ('ridge', rgn)])
+
+    # best ridge alpha = 10 ** 3.42
+    parameters = {'ridge__alpha': 10 ** np.linspace(-5, 5, 20)}
+
+    grid_search = GridSearchCV(pca_ridge, parameters, cv=2, n_jobs=1, scoring='mean_squared_error')
+    grid_search.fit(train_x, train_y[:, 1:])
+
+    return grid_search
+    # construct pipeline. PCA or LLE then RR
+    # feed into cross validation
