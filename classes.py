@@ -41,10 +41,71 @@ class TrainSolutions(object):
     """
     Utility class for storing training Ys
     """
+    # Maps classes to columns, gids are removed
+    class_map = {
+        1: [0, 1, 2],
+        2: [3, 4],
+        3: [5, 6],
+        4: [7, 8],
+        5: [9, 10, 11, 12],
+        6: [13, 14],
+        7: [15, 16, 17],
+        8: [18, 19, 20, 21, 22, 23, 24],
+        9: [25, 26, 27],
+        10: [28, 29, 30],
+        11: [31, 32, 33, 34, 35, 36],
+    }
+
+    # Maps a class to the column that it should sum to
+    # Keys are classes, while values are the corresponding column
+    parent_class_map = {
+        2: [1],
+        3: [4],
+        4: [5, 6],
+        5: [8, 31, 32, 33, 34, 35, 36],
+        # Class 6 should equal 1
+        7: [0],
+        8: [13],
+        9: [3],
+        10: [7],
+        11: [28, 29, 30]
+    }
+
     def __init__(self):
         solution = np.loadtxt(TRAIN_SOLUTIONS_FILE, delimiter=',', skiprows=1)
         self.data = solution[:, 1:]
         self.filenames = map(lambda x: str(int(x)) + '.jpg', list(solution[:, 0]))
+
+    @property
+    def classes(self):
+        """
+        Iterator that returns columns of self.data grouped by class
+        """
+        for k, v in self.class_map.items():
+            yield self.data[:, v]
+
+    def get_columns_for_class(self, cls):
+        """
+        Returns the columns that correspond to class cls
+        """
+        return self.data[:, self.class_map[cls]]
+
+    def get_sum_for_class(self, cls):
+        """
+        Returns a numpy columnar array of values to which the provided class should sum.
+        E.g. doing get_sum_for_class(1) would return an array of 1s with dimensions (n_train, 1) since the columns
+        of class 1 should always sum to 1
+        """
+        cols = self.data[:, self.parent_class_map[cls]]
+        return np.sum(cols, 1, keepdims=True)
+
+    def get_rebased_columns_for_class(self, cls):
+        """
+        Returns the columns that correspond to class, but rebased so that the columns sum to 1
+        """
+        cols = self.get_columns_for_class(cls)
+        colsums = np.sum(cols, 1, keepdims=True)
+        return np.true_divide(cols, colsums)
 
 
 # Keep a single instance for the whole workspace
