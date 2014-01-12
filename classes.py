@@ -15,6 +15,9 @@ import os
 from constants import N_TEST
 import logging
 from sklearn.linear_model import Ridge
+from skimage.transform import rescale
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.base import BaseEstimator
 
 logger = logging.getLogger('galaxy')
 logger.setLevel(logging.DEBUG)
@@ -144,6 +147,9 @@ class RawImage(object):
         pyplot.imshow(self.data, **kwargs)
         pyplot.show()
 
+    def rescale(self, scale):
+        self.data = rescale(self.data, scale)
+
     @property
     def central_pixel_coordinates(self):
         width = self.data.shape[1]
@@ -268,3 +274,19 @@ class RidgeClipped(Ridge):
         pred[pred < 0] = 0
 
         return pred
+
+
+# Do ridge regression and then random forest
+class RidgeRF(BaseEstimator):
+    def __init__(self, alpha=1.0, n_estimators=10):
+        self.ridge_rgn = Ridge(alpha=14.0)
+        self.rf_rgn = RandomForestRegressor(n_estimators=100)
+
+    def fit(self, X, y):
+        self.ridge_rgn.fit(X, y)
+        ridge_y = self.ridge_rgn.predict(X)
+        self.rf_rgn.fit(ridge_y, y)
+
+    def predict(self, X):
+        ridge_y = self.ridge_rgn.predict(X)
+        return self.rf_rgn.predict(ridge_y)
