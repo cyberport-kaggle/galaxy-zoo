@@ -2,6 +2,7 @@
 Run scripts for individual models in Galaxy Zoo
 """
 import os
+import random
 import time
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.pipeline import Pipeline
@@ -147,14 +148,17 @@ class RandomForestModel(classes.BaseModel):
         return self.build_features(test_files, False)
 
     def get_estimator(self):
-        classifier = RandomForestClassifier(random_state=0, verbose=1)
+        classifier = RandomForestClassifier(random_state=0, verbose=3)
         return classifier
 
     def fit_estimator(self):
         start_time = time.clock()
+        # Since the random forest has memory issue, we'll downsample the training set to 10k records
+        random.seed(0)
+        self.sample = random.sample(xrange(self.train_x.shape[0]), 5000)
         logger.info("Fitting random forest estimator")
         self.estimator = self.get_estimator()
-        self.estimator.fit(self.train_x, self.train_y)
+        self.estimator.fit(self.train_x[self.sample, :], self.train_y[self.sample, 1:4])  # Train only on class 1 responses for now
         logger.info("Finished fitting model in {}".format(time.clock() - start_time))
 
     def predict_test(self):
@@ -162,13 +166,13 @@ class RandomForestModel(classes.BaseModel):
         return self.test_y
 
     def execute(self):
-        self.train_y = classes.get_training_data()
+        self.train_y = classes.get_training_data()  # Remember that train_y includes the id row!
         self.train_x = self.build_train_predictors()
         self.fit_estimator()
 
         # Get an in sample RMSE
-        training_predict = self.estimator.predict(self.train_x)
-        rmse = classes.rmse(training_predict, self.train_y)
+        training_predict = self.estimator.predict(self.train_x[self.sample, :])
+        rmse = classes.rmse(training_predict, self.train_y[self.sample, 1:4])
 
         self.test_x = self.build_test_predictors()
         return self.predict_test()
