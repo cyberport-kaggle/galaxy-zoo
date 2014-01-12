@@ -10,6 +10,7 @@ from skimage import color
 import numpy as np
 from matplotlib import pyplot
 import time
+from sklearn.metrics import mean_squared_error, make_scorer
 from constants import *
 import os
 from constants import N_TEST
@@ -221,13 +222,17 @@ def get_training_data():
     return solution
 
 
-def rmse(first, second):
+def rmse(y_true, y_pred):
     """
     Calculates rmse for two numpy arrays
     """
-    res = np.sqrt(np.mean(np.square(first - second)))
+    res = np.sqrt(mean_squared_error(y_true, y_pred))
     logger.info("In sample RMSE: {}".format(res))
     return res
+
+
+# Scorer that can be used with Scikit-learn CV
+rmse_scorer = make_scorer(rmse, greater_is_better=False)
 
 
 def get_test_ids():
