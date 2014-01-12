@@ -207,13 +207,13 @@ def ridge_regression():
         print row
 
     pca = RandomizedPCA(1000, whiten=True)
-    rgn = Ridge()
+    rgn = classes.RidgeClipped()
 
     pca_ridge = Pipeline([('pca', pca),
                           ('ridge', rgn)])
 
     # best ridge alpha = 10 ** 3.42
-    parameters = {'ridge__alpha': 10 ** np.linspace(-5, 5, 20)}
+    parameters = {'ridge__alpha': 10 ** np.linspace(2.8, 4, 4)}
 
     grid_search = GridSearchCV(pca_ridge, parameters, cv=2, n_jobs=1, scoring='mean_squared_error')
     grid_search.fit(train_x, train_y[:, 1:])
