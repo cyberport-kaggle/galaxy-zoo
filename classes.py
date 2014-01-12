@@ -217,8 +217,7 @@ def get_training_filenames(training_data=None):
 
 
 def get_training_data():
-    solutions_file = 'data/training_solutions_rev1.csv'
-    solution = np.loadtxt(solutions_file, delimiter=',', skiprows=1)
+    solution = np.loadtxt(TRAIN_SOLUTIONS_FILE, delimiter=',', skiprows=1)
     return solution
 
 
