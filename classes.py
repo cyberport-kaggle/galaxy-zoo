@@ -10,10 +10,10 @@ from skimage import color
 import numpy as np
 from matplotlib import pyplot
 import time
+from sklearn import grid_search, cross_validation
 from sklearn.metrics import mean_squared_error, make_scorer
 from constants import *
 import os
-from constants import N_TEST
 import logging
 from sklearn.linear_model import Ridge
 from skimage.transform import rescale
@@ -37,7 +37,60 @@ logger.addHandler(logfile)
 logger.addHandler(logstream)
 
 
+class TrainSolutions(object):
+    """
+    Utility class for storing training Ys
+    """
+    def __init__(self):
+        solution = np.loadtxt(TRAIN_SOLUTIONS_FILE, delimiter=',', skiprows=1)
+        self.data = solution[:, 1:]
+        self.filenames = map(lambda x: str(int(x)) + '.jpg', list(solution[:, 0]))
+
+
+def rmse(y_true, y_pred):
+    """
+    Calculates rmse for two numpy arrays
+    """
+    res = np.sqrt(mean_squared_error(y_true, y_pred))
+    logger.info("RMSE: {}".format(res))
+    return res
+
+
+# Scorer that can be used with Scikit-learn CV
+rmse_scorer = make_scorer(rmse, greater_is_better=False)
+
+
+def get_test_ids():
+    """
+    Gets a (79971, 1) numpy array that can be attached for output
+    """
+    test_files = sorted(os.listdir(TEST_IMAGE_PATH))
+    return np.array(map(lambda x: int(x[0:6]), test_files), ndmin=2).T
+
+
+def cache_to_file(filename, fmt='%.18e'):
+    """
+    Decorator for wrapping methods so that the result of those methods are written to a file and cached
+    If the file exists, then the method will instead read from the file.
+    Any function that is wrapped by this shouldn't have side effects (e.g. set properties on the instance)
+    """
+    def cache_decorator(func):
+        @wraps(func)
+        def cached_func(*args, **kwargs):
+            if os.path.exists(filename):
+                logger.info("Result of {} already exists, loading from file {}".format(func.__name__, filename))
+                res = np.loadtxt(filename, delimiter=',')
+            else:
+                res = func(*args, **kwargs)
+                logger.info("Caching results of {} to {}".format(func.__name__, filename))
+                np.savetxt(filename, res, delimiter=',', fmt=fmt)
+            return res
+        return cached_func
+    return cache_decorator
+
+
 class Submission(object):
+
     """
     Utility function that takes care of some common tasks relating to submissiosn files
     """
@@ -81,7 +134,6 @@ class Submission(object):
         Check that the number of rows is correct
         """
         pass
-
     def check_probabilities(self):
         """
         Ensure that probabilities for subsequent questions in the tree add up to their parent's probability
@@ -91,9 +143,11 @@ class Submission(object):
 
 
 class RawImage(object):
+
     """
     Used to load raw image files
     """
+
     def __init__(self, filename):
         """
         Given a file name, load the ndarray
@@ -165,22 +219,40 @@ class RawImage(object):
         """
         central_coord = self.central_pixel_coordinates
         return self.data[central_coord[0], central_coord[1]]
-
     @property
     def average_intensity(self):
         return self.data.mean()
 
 
 class BaseModel(object):
+    # Filenames used to store the feature arrays used in fitting/predicting
     """
     Base model for training models.
     Rationale for having a class structure for models is so that we can:
       1) Do some standard utility things like timing
       2) Easily vary our models.  For example, if we have a model, and we want to have a variant that uses slightly different
          predictors, we can just subclass and override that part of the run function
-
-    Subclasses must implement execute(), which is called by run().
     """
+    # This is so that we don't have to iterate over all 70k images every time we fit.
+    train_predictors_file = None
+    test_predictors_file = None
+    # Number of features that the model will generate
+    n_features = None
+
+    def __init__(self, *args, **kwargs):
+        self.training_data = TrainSolutions()
+        self.train_x = None
+        self.train_y = self.training_data.data
+        self.test_x = None
+        self.estimator = None
+        # Parameters for the grid search
+        self.grid_search_parameters = kwargs.get('grid_search_parameters', None)
+        self.grid_search_estimator = None
+        # Sample to use for the grid search.  Should be between 0 and 1
+        self.grid_search_sample = kwargs.get('grid_search_sample', None)
+        self.grid_search_x = None
+        self.grid_search_y = None
+
     def do_for_each_image(self, files, func, n_features, training):
         """
         Function that iterates over a list of files, applying func to the image indicated by that function.
@@ -198,76 +270,112 @@ class BaseModel(object):
                 logger.info("Processed {} images".format(counter))
         return predictors
 
-    def execute(self):
-        raise NotImplementedError("Don't use the base class")
+    def build_features(self, files, training=True):
+        """
+        Utility method that loops over every image and applies self.process_image
+        Returns a numpy array of dimensions (n_observations, n_features)
+        """
+        logger.info("Building predictors")
+        predictors = self.do_for_each_image(files, self.process_image, self.n_features, training)
+        return predictors
+
+    def build_train_predictors(self):
+        """
+        Builds the training predictors.  Once the predictors are built, they are cached to a file.
+        If the file already exists, the predictors are loaded from file.
+        Couldn't use the @cache_to_file decorator because the decorator factory doesn't have access to self at compilation
+
+        Returns:
+            A numpy array of shape (n_train, n_features)
+        """
+        file_list = self.training_data.filenames
+        if os.path.exists(self.train_predictors_file):
+            logger.info("Training predictors already exists, loading from file {}".format(self.train_predictors_file))
+            res = np.load(self.train_predictors_file)
+        else:
+            res = self.build_features(file_list, True)
+            logger.info("Caching training predictors to {}".format(self.train_predictors_file))
+            np.save(self.train_predictors_file, res)
+        return res
+
+    def build_test_predictors(self):
+        """
+        Builds the test predictors
+
+        Returns:
+            A numpy array of shape (n_test, n_features)
+        """
+        test_files = sorted(os.listdir(TEST_IMAGE_PATH))
+        if os.path.exists(self.test_predictors_file):
+            logger.info("Test predictors already exists, loading from file {}".format(self.test_predictors_file))
+            res = np.load(self.test_predictors_file)
+        else:
+            res = self.build_features(test_files, False)
+            logger.info("Caching test predictors to {}".format(self.test_predictors_file))
+            np.save(self.test_predictors_file, res)
+        return res
+
+    def perform_grid_search_and_cv(self):
+        """
+        Performs cross validation and grid search to identify optimal parameters and to score the estimator
+        The grid search space is defined by self.grid_search_parameters.
+
+        If grid_search_sample is defined, then a downsample of the full train_x is used to perform the grid search
+        """
+        if self.grid_search_parameters is not None:
+            logging.info("Performing grid search")
+            start_time = time.clock()
+            self.grid_search_estimator = grid_search.GridSearchCV(self.get_estimator(),
+                                                                  self.grid_search_parameters,
+                                                                  scoring=rmse_scorer, verbose=3)
+            if self.grid_search_sample is not None:
+                logging.info("Using {} of the train set for grid search".format(self.grid_search_sample))
+                # Downsample if a sampling rate is defined
+                self.grid_search_estimator.refit = False
+                self.grid_search_x, \
+                self.grid_search_x_test, \
+                self.grid_search_y, \
+                self.grid_search_y_test = cross_validation.train_test_split(self.train_x,
+                                                                            self.train_y,
+                                                                            train_size=self.grid_search_sample)
+            else:
+                logging.info("Using full train set for the grid search")
+                # Otherwise use the full set
+                self.grid_search_x = self.train_x
+                self.grid_search_y = self.train_y
+            self.grid_search_estimator.fit(self.grid_search_x, self.grid_search_y)
+            logger.info("Grid search completed in {}".format(time.clock() - start_time))
 
     def run(self):
         start_time = time.clock()
 
         res = self.execute()
+        # A general workflow for a model would be as follows:
+        # 1) Generate the features by iterating over each image
+        # 3) Perform Grid Search and CV to get the best model
+        # 4) Fit the best estimator on the full dataset
+        # 5) Use the estimator to predict on the test set
 
         end_time = time.clock()
         logger.info("Model completed in {}".format(end_time - start_time))
         return res
 
+    def execute(self):
+        raise NotImplementedError("Don't use the base class")
 
-def get_training_filenames(training_data=None):
-    """
-    Gets the list of training file names in order of the solutions file
-    Returns a list
-
-    Alternatively, if you've already loaded the training data, you can pass it in to prevent loading it twice
-    """
-    solution = training_data if training_data is not None else get_training_data()
-    assert solution.shape == (N_TRAIN, 38), "Training data dimensions incorrect: was {}, expected {}".format(solution.shape, (N_TRAIN, 37))
-    return map(lambda x: str(int(x)) + '.jpg', list(solution[:, 0]))
-
-
-def get_training_data():
-    solution = np.loadtxt(TRAIN_SOLUTIONS_FILE, delimiter=',', skiprows=1)
-    return solution
-
-
-def rmse(y_true, y_pred):
-    """
-    Calculates rmse for two numpy arrays
-    """
-    res = np.sqrt(mean_squared_error(y_true, y_pred))
-    logger.info("In sample RMSE: {}".format(res))
-    return res
-
-
-# Scorer that can be used with Scikit-learn CV
-rmse_scorer = make_scorer(rmse, greater_is_better=False)
-
-
-def get_test_ids():
-    """
-    Gets a (79971, 1) numpy array that can be attached for output
-    """
-    test_files = sorted(os.listdir(TEST_IMAGE_PATH))
-    return np.array(map(lambda x: int(x[0:6]), test_files), ndmin=2).T
-
-
-def cache_to_file(filename, fmt='%.18e'):
-    """
-    Decorator for wrapping methods so that the result of those methods are written to a file and cached
-    If the file exists, then the method will instead read from the file.
-    Any function that is wrapped by this shouldn't have side effects (e.g. set properties on the instance)
-    """
-    def cache_decorator(func):
-        @wraps(func)
-        def cached_func(*args, **kwargs):
-            if os.path.exists(filename):
-                logger.info("Result of {} already exists, loading from file {}".format(func.__name__, filename))
-                res = np.loadtxt(filename, delimiter=',')
-            else:
-                res = func(*args, **kwargs)
-                logger.info("Caching results of {} to {}".format(func.__name__, filename))
-                np.savetxt(filename, res, delimiter=',', fmt=fmt)
-            return res
-        return cached_func
-    return cache_decorator
+    def get_estimator(self):
+        """
+        Returns a Scikit-learn estimator used in the final model.
+        Subclasses should implement this method
+        """
+        raise NotImplementedError("Subclasses of BaseModel should implement get_estimator")
+    @staticmethod
+    def process_image(img):
+        """
+        A function that takes a RawImage object and returns a (1, n_features) numpy array
+        Subclasses should implement this method
+        """
+        raise NotImplementedError("Subclasses of BaseModel should implement process_image")
 
 
 class RidgeClipped(Ridge):

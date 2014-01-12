@@ -4,7 +4,7 @@ Run scripts for individual models in Galaxy Zoo
 import os
 import random
 import time
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.pipeline import Pipeline
 
 import classes
@@ -27,7 +27,7 @@ def train_set_average_benchmark(outfile="sub_average_benchmark_000.csv"):
     submission for every row in the test set
     """
     start_time = time.clock()
-    training_data = classes.get_training_data()[:, 1:]
+    training_data = classes.TrainSolutions().data
 
     solutions = np.mean(training_data, axis=0)
 
@@ -55,8 +55,7 @@ class CentralPixelBenchmark(classes.BaseModel):
         # Build the training data - load all of the images and extract the RGB values of the central pixel
         # Resulting training dataset should be (70948, 3)
         logger.info("Building predictors")
-        file_list = classes.get_training_filenames(self.train_y)
-        return self.build_features(file_list, True)
+        return self.build_features(self.training_data.filenames, True)
 
     def fit_estimator(self):
         # Fit a k-means clustering estimator
@@ -75,7 +74,7 @@ class CentralPixelBenchmark(classes.BaseModel):
         average_responses = np.zeros((37, 37))
         for cluster in range(37):
             idx = self.estimator.labels_ == cluster
-            responses = self.train_y[idx, 1:]
+            responses = self.train_y[idx, :]
             average_responses[cluster] = responses.mean(axis=0)
         logger.info("Finished calculating cluster averages")
         return average_responses
@@ -96,14 +95,13 @@ class CentralPixelBenchmark(classes.BaseModel):
         return test_averages
 
     def execute(self):
-        self.train_y = classes.get_training_data()
         self.predictors = self.build_train_predictors()
         self.fit_estimator()
         average_responses = self.get_cluster_averages()
 
         # Assign cluster averages for the training set, to get an in sample RMSE
         training_averages = average_responses[self.estimator.labels_]
-        rmse = classes.rmse(training_averages, self.train_y[:, 1:])
+        rmse = classes.rmse(training_averages, self.train_y)
 
         return self.predict_test(average_responses)
 
@@ -122,43 +120,25 @@ def central_pixel_benchmark(outfile="sub_central_pixel_001.csv"):
 
 
 class RandomForestModel(classes.BaseModel):
-    train_predictors_file = 'data/data_random_forest_train_001.csv'
-    test_predictors_file = 'data/data_random_forest_test_001.csv'
+    train_predictors_file = 'data/data_random_forest_train_001.npy'
+    test_predictors_file = 'data/data_random_forest_test_001.npy'
+    n_features = 75
 
     @staticmethod
     def process_image(img):
         return img.grid_sample(20, 2).flatten().astype('float64') / 255
 
-    def build_features(self, files, training=True):
-        #  Sample a 5x5 grid of pixels.  Totals 75 features: 5x5x3
-        logger.info("Building predictors")
-
-        predictors = self.do_for_each_image(files, self.process_image, 75, training)
-        return predictors
-
-    @classes.cache_to_file(train_predictors_file)
-    def build_train_predictors(self):
-        file_list = classes.get_training_filenames(self.train_y)
-        return self.build_features(file_list, True)
-
-    @classes.cache_to_file(test_predictors_file)
-    def build_test_predictors(self):
-        test_files = sorted(os.listdir(TEST_IMAGE_PATH))
-        return self.build_features(test_files, False)
-
     def get_estimator(self):
-        classifier = RandomForestClassifier(random_state=0, verbose=3)
+        classifier = RandomForestRegressor(random_state=0, verbose=3, oob_score=True)
         return classifier
 
     def fit_estimator(self):
         start_time = time.clock()
-        # Since the random forest has memory issue, we'll downsample the training set to 10k records
         random.seed(0)
-        self.sample = random.sample(xrange(self.train_x.shape[0]), 5000)
+        self.sample = random.sample(xrange(self.train_x.shape[0]), 10000)
         logger.info("Fitting random forest estimator")
         self.estimator = self.get_estimator()
-        self.estimator.fit(self.train_x[self.sample, :],
-                           self.train_y[self.sample, 1:4])  # Train only on class 1 responses for now
+        self.estimator.fit(self.train_x[self.sample, :], self.train_y[self.sample, 0:3])  # Train only on class 1 responses for now
         logger.info("Finished fitting model in {}".format(time.clock() - start_time))
 
     def predict_test(self):
@@ -166,13 +146,12 @@ class RandomForestModel(classes.BaseModel):
         return self.test_y
 
     def execute(self):
-        self.train_y = classes.get_training_data()  # Remember that train_y includes the id row!
         self.train_x = self.build_train_predictors()
         self.fit_estimator()
 
         # Get an in sample RMSE
         training_predict = self.estimator.predict(self.train_x[self.sample, :])
-        rmse = classes.rmse(training_predict, self.train_y[self.sample, 1:4])
+        rmse = classes.rmse(training_predict, self.train_y[self.sample, :])
 
         self.test_x = self.build_test_predictors()
         return self.predict_test()
@@ -192,7 +171,9 @@ def random_forest_001(outfile="sub_random_forest_001.csv"):
 
 def ridge_regression():
     # read train Y
-    train_y = classes.get_training_data()
+    tmp = classes.TrainSolutions()
+    train_y = tmp.data
+    train_filenames = tmp.filenames
 
     # randomly sample 10% Y and select the gid's
     n = 7000
@@ -202,7 +183,7 @@ def ridge_regression():
     train_x = np.zeros((n, (crop_size * scale) ** 2 * 3))
 
     # load the training images and crop at the same time
-    for row, gid in enumerate(train_y[:, 0]):
+    for row, gid in enumerate(train_filenames):
         img = classes.RawImage('data/images_training_rev1/' + str(int(gid)) + '.jpg')
         img.crop(crop_size)
         img.rescale(scale)
@@ -219,7 +200,7 @@ def ridge_regression():
     parameters = {'ridge__alpha': 10 ** np.linspace(-1, 2, 8)}
 
     grid_search = GridSearchCV(pca_ridge, parameters, cv=2, n_jobs=1, scoring='mean_squared_error', refit=False)
-    grid_search.fit(train_x, train_y[:, 1:])
+    grid_search.fit(train_x, train_y)
 
     return grid_search
 
