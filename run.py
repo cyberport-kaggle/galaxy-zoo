@@ -171,9 +171,8 @@ def random_forest_001(outfile="sub_random_forest_001.csv"):
 
 def ridge_regression():
     # read train Y
-    tmp = classes.TrainSolutions()
-    train_y = tmp.data
-    train_filenames = tmp.filenames
+    train_y = classes.train_solutions.data
+    train_filenames = classes.train_solutions.filenames
 
     # randomly sample 10% Y and select the gid's
     n = 7000
@@ -204,9 +203,10 @@ def ridge_regression():
 
     return grid_search
 
+
 def ridge_rf():
-        # read train Y
-    train_y = classes.get_training_data()
+# read train Y
+    train_y = classes.train_solutions.data
 
     # randomly sample 10% Y and select the gid's
     n = 7000
@@ -216,7 +216,7 @@ def ridge_rf():
     train_x = np.zeros((n, (crop_size * scale) ** 2 * 3))
 
     # load the training images and crop at the same time
-    for row, gid in enumerate(train_y[:, 0]):
+    for row, gid in enumerate(classes.train_solutions.filenames):
         img = classes.RawImage('data/images_training_rev1/' + str(int(gid)) + '.jpg')
         img.crop(crop_size)
         img.rescale(scale)
@@ -229,6 +229,6 @@ def ridge_rf():
     parameters = {'alpha': [14], 'n_estimators': [10]}
 
     grid_search = GridSearchCV(ridge_rf, parameters, cv=2, n_jobs=1, scoring='mean_squared_error', refit=False)
-    grid_search.fit(train_x, train_y[:, 1:])
+    grid_search.fit(train_x, train_y)
 
     return grid_search

@@ -47,6 +47,10 @@ class TrainSolutions(object):
         self.filenames = map(lambda x: str(int(x)) + '.jpg', list(solution[:, 0]))
 
 
+# Keep a single instance for the whole workspace
+train_solutions = TrainSolutions()
+
+
 def rmse(y_true, y_pred):
     """
     Calculates rmse for two numpy arrays
@@ -240,9 +244,8 @@ class BaseModel(object):
     n_features = None
 
     def __init__(self, *args, **kwargs):
-        self.training_data = TrainSolutions()
         self.train_x = None
-        self.train_y = self.training_data.data
+        self.train_y = train_solutions.data
         self.test_x = None
         self.estimator = None
         # Parameters for the grid search
@@ -288,7 +291,7 @@ class BaseModel(object):
         Returns:
             A numpy array of shape (n_train, n_features)
         """
-        file_list = self.training_data.filenames
+        file_list = train_solutions.filenames
         if os.path.exists(self.train_predictors_file):
             logger.info("Training predictors already exists, loading from file {}".format(self.train_predictors_file))
             res = np.load(self.train_predictors_file)
