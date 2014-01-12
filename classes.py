@@ -96,8 +96,12 @@ class TrainSolutions(object):
         E.g. doing get_sum_for_class(1) would return an array of 1s with dimensions (n_train, 1) since the columns
         of class 1 should always sum to 1
         """
-        cols = self.data[:, self.parent_class_map[cls]]
-        return np.sum(cols, 1, keepdims=True)
+        col_nums = self.parent_class_map.get(cls, None)
+        if col_nums:
+            cols = self.data[:, col_nums]
+            return np.sum(cols, 1, keepdims=True)
+        else:
+            return np.ones((self.data.shape[0], 1))
 
     def get_rebased_columns_for_class(self, cls):
         """
