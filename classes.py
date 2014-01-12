@@ -15,7 +15,7 @@ from constants import *
 import os
 from constants import N_TEST
 import logging
-
+from sklearn.linear_model import Ridge
 
 logger = logging.getLogger('galaxy')
 logger.setLevel(logging.DEBUG)
@@ -262,3 +262,14 @@ def cache_to_file(filename, fmt='%.18e'):
             return res
         return cached_func
     return cache_decorator
+
+
+class RidgeClipped(Ridge):
+    def predict(self, X):
+        pred = super(RidgeClipped, self).predict(X)
+
+        # clip predictions to 0 and 1.
+        pred[pred > 1] = 1
+        pred[pred < 0] = 0
+
+        return pred
