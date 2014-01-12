@@ -315,7 +315,7 @@ class BaseModel(object):
             np.save(self.test_predictors_file, res)
         return res
 
-    def perform_grid_search_and_cv(self):
+    def perform_grid_search_and_cv(self, *args, **kwargs):
         """
         Performs cross validation and grid search to identify optimal parameters and to score the estimator
         The grid search space is defined by self.grid_search_parameters.
@@ -327,7 +327,7 @@ class BaseModel(object):
             start_time = time.clock()
             self.grid_search_estimator = grid_search.GridSearchCV(self.get_estimator(),
                                                                   self.grid_search_parameters,
-                                                                  scoring=rmse_scorer, verbose=3)
+                                                                  scoring=rmse_scorer, verbose=3, **kwargs)
             if self.grid_search_sample is not None:
                 logging.info("Using {} of the train set for grid search".format(self.grid_search_sample))
                 # Downsample if a sampling rate is defined
