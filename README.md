@@ -1,31 +1,22 @@
-galaxy-zoo
-==========
+# galaxy-zoo
 
 
-Current Models
-==============
+## Current Models
 
-Central Pixel Clustering Benchmark
-----------------------------------
+### Central Pixel Clustering Benchmark
 
-Ridge Regression
-----------------
+### Ridge Regression
 
-Random Forest Regression
-------------------------
+### Random Forest Regression
 
 
-Current Feature sets
-====================
+## Current Feature sets
 
-Sampled Pixels around center
-----------------------------
+### Sampled Pixels around center
 
-Ideas
-=====
+## Ideas
 
-Training methods
-----------------
+### Training methods
 
  - Training by class - Instead of training all 37 response columns at once, train each class separately.
  - Normalize class probability sums to 1 - Because of the structure of the Galaxy Zoo tree, each row's class sums
@@ -34,8 +25,7 @@ Training methods
  - Feed parent class predictions to children classes - Follow the hierarchy of the Galaxy Zoo tree structure.  For example,
  Feed the prediction for Class 1.1 into the model for Class 7.  Not sure if this should be paired with the normalization above.
 
-Data preprocessing / Feature generation
----------------------------------------
+### Data preprocessing / Feature generation
 
  - Unsupervised feature learning - http://ufldl.stanford.edu/wiki/index.php/UFLDL_Tutorial
  - K-means clustering for feature learning - Research from the Stanford group suggests that k-means can be just as effective
