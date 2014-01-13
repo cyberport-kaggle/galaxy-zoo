@@ -322,6 +322,8 @@ class BaseModel(object):
         # Parameters for CV
         self.cv_folds = kwargs.get('cv_folds', 3)
         self.cv_sample = kwargs.get('cv_sample', None)
+        # Parallelization
+        self.n_jobs = kwargs.get('n_jobs', 1)
 
     def do_for_each_image(self, files, func, n_features, training):
         """
@@ -469,7 +471,7 @@ class BaseModel(object):
     def execute(self):
         raise NotImplementedError("Don't use the base class")
 
-    def get_estimator(self):
+    def get_estimator(self, **kwargs):
         """
         Returns a Scikit-learn estimator used in the final model.
         Subclasses should implement this method
