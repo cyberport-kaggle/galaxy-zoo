@@ -214,3 +214,7 @@ Out[11]: -0.13285532108270079
  mean: -0.14187, std: 0.00208, params: {'max_features': 'auto', 'min_samples_split': 100, 'n_estimators': 250, 'min_samples_leaf': 50}]
 
  """
+
+import run
+a = run.RandomForestModel(cv_sample=0.5)
+a.train_x = a.build_train_predictors()

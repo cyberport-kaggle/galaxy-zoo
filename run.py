@@ -26,7 +26,7 @@ def train_set_average_benchmark(outfile="sub_average_benchmark_000.csv"):
     What should be the actual baseline.  Takes the training set solutions, averages them, and uses that as the
     submission for every row in the test set
     """
-    start_time = time.clock()
+    start_time = time.time()
     training_data = classes.TrainSolutions().data
 
     solutions = np.mean(training_data, axis=0)
@@ -38,7 +38,7 @@ def train_set_average_benchmark(outfile="sub_average_benchmark_000.csv"):
     solution = classes.Submission(np.tile(solutions, (N_TEST, 1)))
     solution.to_file(outfile)
 
-    end_time = time.clock()
+    end_time = time.time()
     logger.info("Model completed in {}".format(end_time - start_time))
 
 
@@ -61,11 +61,11 @@ class CentralPixelBenchmark(classes.BaseModel):
         # Fit a k-means clustering estimator
         # We use 37 centers initially because there are 37 classes
         # Seems like the sample submission used 6 clusters
-        start_time = time.clock()
+        start_time = time.time()
         logger.info("Fitting kmeans estimator")
         self.estimator = KMeans(init='k-means++', n_clusters=37)
         self.estimator.fit(self.predictors)
-        logger.info("Finished fitting model in {}".format(time.clock() - start_time))
+        logger.info("Finished fitting model in {}".format(time.time() - start_time))
 
     def get_cluster_averages(self):
         # Get the average response for each cluster in the training set
@@ -129,17 +129,16 @@ class RandomForestModel(classes.BaseModel):
         return img.grid_sample(20, 2).flatten().astype('float64') / 255
 
     def get_estimator(self):
-        classifier = RandomForestRegressor(random_state=0, verbose=3, oob_score=True)
+        classifier = RandomForestRegressor(n_estimators=250, random_state=0, verbose=3, oob_score=True)
         return classifier
 
     def fit_estimator(self):
-        start_time = time.clock()
+        start_time = time.time()
         random.seed(0)
-        self.sample = random.sample(xrange(self.train_x.shape[0]), 10000)
         logger.info("Fitting random forest estimator")
         self.estimator = self.get_estimator()
-        self.estimator.fit(self.train_x[self.sample, :], self.train_y[self.sample, 0:3])  # Train only on class 1 responses for now
-        logger.info("Finished fitting model in {}".format(time.clock() - start_time))
+        self.estimator.fit(self.train_x, self.train_y)  # Train only on class 1 responses for now
+        logger.info("Finished fitting model in {}".format(time.time() - start_time))
 
     def predict_test(self):
         self.test_y = self.estimator.predict(self.test_x)

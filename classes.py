@@ -19,6 +19,7 @@ from sklearn.linear_model import Ridge
 from skimage.transform import rescale
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.base import BaseEstimator
+from sklearn.cross_validation import KFold
 
 logger = logging.getLogger('galaxy')
 logger.setLevel(logging.DEBUG)
@@ -318,8 +319,9 @@ class BaseModel(object):
         self.grid_search_estimator = None
         # Sample to use for the grid search.  Should be between 0 and 1
         self.grid_search_sample = kwargs.get('grid_search_sample', None)
-        self.grid_search_x = None
-        self.grid_search_y = None
+        # Parameters for CV
+        self.cv_folds = kwargs.get('cv_folds', 3)
+        self.cv_sample = kwargs.get('cv_sample', None)
 
     def do_for_each_image(self, files, func, n_features, training):
         """
@@ -392,7 +394,7 @@ class BaseModel(object):
         """
         if self.grid_search_parameters is not None:
             logging.info("Performing grid search")
-            start_time = time.clock()
+            start_time = time.time()
             self.grid_search_estimator = grid_search.GridSearchCV(self.get_estimator(),
                                                                   self.grid_search_parameters,
                                                                   scoring=rmse_scorer, verbose=3, **kwargs)
@@ -412,10 +414,36 @@ class BaseModel(object):
                 self.grid_search_x = self.train_x
                 self.grid_search_y = self.train_y
             self.grid_search_estimator.fit(self.grid_search_x, self.grid_search_y)
-            logger.info("Grid search completed in {}".format(time.clock() - start_time))
+            logger.info("Grid search completed in {}".format(time.time() - start_time))
+
+    def perform_cross_validation(self, *args, **kwargs):
+        """
+        Performs cross validation using the main estimator.  In some cases, when we don't need to search
+        across a grid of hyperparameters, we may want to perform cross validation only.
+        """
+        start_time = time.time()
+        if self.cv_sample is not None:
+            logging.info("Performing {}-fold cross validation with {:.0%} of the sample".format(self.cv_folds, self.cv_sample))
+            self.cv_x,\
+            self.cv_x_test,\
+            self.cv_y,\
+            self.cv_y_test = cross_validation.train_test_split(self.train_x, self.train_y, train_size=self.cv_sample)
+        else:
+            logging.info("Performing {}-fold cross validation with full training set".format(self.cv_folds))
+            self.cv_x = self.train_x
+            self.cv_y = self.train_y
+        self.cv_iterator = cross_validation.KFold(self.cv_x.shape[0], n_folds=self.cv_folds)
+        self.cv_scores = cross_validation.cross_val_score(self.get_estimator(),
+                                                          self.cv_x,
+                                                          self.cv_y,
+                                                          cv=self.cv_iterator,
+                                                          scoring=rmse_scorer, verbose=2, n_jobs=2)
+        logger.info("Cross validation completed in {}.  Scores:".format(time.time() - start_time))
+        logger.info("{}".format(self.cv_scores))
+
 
     def run(self):
-        start_time = time.clock()
+        start_time = time.time()
 
         res = self.execute()
         # A general workflow for a model would be as follows:
@@ -424,7 +452,7 @@ class BaseModel(object):
         # 4) Fit the best estimator on the full dataset
         # 5) Use the estimator to predict on the test set
 
-        end_time = time.clock()
+        end_time = time.time()
         logger.info("Model completed in {}".format(end_time - start_time))
         return res
 
