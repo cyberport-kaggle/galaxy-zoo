@@ -129,7 +129,15 @@ class RandomForestModel(classes.BaseModel):
         return img.grid_sample(20, 2).flatten().astype('float64') / 255
 
     def get_estimator(self, **kwargs):
-        classifier = RandomForestRegressor(n_estimators=250, random_state=0, verbose=3, oob_score=True, n_jobs=self.n_jobs)
+        params = {
+            'n_estimators': 250,
+            'random_state': 0,
+            'verbose': 3,
+            'oob_score': True,
+            'n_jobs': self.n_jobs
+        }
+        params.update(kwargs)
+        classifier = RandomForestRegressor(**params)
         return classifier
 
     def execute(self):

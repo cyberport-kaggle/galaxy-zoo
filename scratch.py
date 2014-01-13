@@ -218,3 +218,18 @@ Out[11]: -0.13285532108270079
 import run
 a = run.RandomForestModel(cv_sample=0.5)
 a.train_x = a.build_train_predictors()
+
+# Troubleshooting scikit parallel processing
+
+from sklearn import datasets
+import numpy as np
+from sklearn import ensemble
+
+rf = ensemble.RandomForestRegressor(n_estimators=250, random_state=0, verbose=3, oob_score=True, n_jobs=3)
+x, y = datasets.make_regression(n_samples=50000, n_features=25, n_targets=35)
+rf.fit(x, y)
+
+import run
+a = run.RandomForestModel(estimator_params={'n_estimators':100}, n_jobs=3)
+a.train_x = a.build_train_predictors()
+a.fit_estimator()

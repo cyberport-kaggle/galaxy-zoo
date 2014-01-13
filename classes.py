@@ -314,6 +314,7 @@ class BaseModel(object):
         self.train_y = train_solutions.data
         self.test_x = None
         self.estimator = None
+        self.estimator_params = kwargs.get('estimator_params', {})
         # Parameters for the grid search
         self.grid_search_parameters = kwargs.get('grid_search_parameters', None)
         self.grid_search_estimator = None
@@ -464,7 +465,7 @@ class BaseModel(object):
     def fit_estimator(self):
         start_time = time.time()
         logger.info("Fitting estimator")
-        self.estimator = self.get_estimator()
+        self.estimator = self.get_estimator(**self.estimator_params)
         self.estimator.fit(self.train_x, self.train_y)  # Train only on class 1 responses for now
         logger.info("Finished fitting model in {}".format(time.time() - start_time))
 
