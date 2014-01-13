@@ -64,7 +64,7 @@ Out[11]: -0.13285532108270079
  mean: -0.13825, std: 0.00188, params: {'max_features': 'sqrt', 'min_samples_split': 50, 'n_estimators': 250, 'min_samples_leaf': 5},
  mean: -0.14179, std: 0.00139, params: {'max_features': 'sqrt', 'min_samples_split': 100, 'n_estimators': 10, 'min_samples_leaf': 5},
  mean: -0.14083, std: 0.00169, params: {'max_features': 'sqrt', 'min_samples_split': 100, 'n_estimators': 100, 'min_samples_leaf': 5},
- mean: -0.14078, std: 0.00179, params: {'max_features': 'sqrt', 'min_samples_split': 100, 'n_estimators': 250, 'min_samples_leaf': 5},
+ mean: -0.14078, std: 0.00179, params: {'max_features': 'sqrt', 'min_samples_split': 100, 'sudo apt-get install python-devn_estimators': 250, 'min_samples_leaf': 5},
  mean: -0.13918, std: 0.00162, params: {'max_features': 'sqrt', 'min_samples_split': 2, 'n_estimators': 10, 'min_samples_leaf': 10},
  mean: -0.13687, std: 0.00187, params: {'max_features': 'sqrt', 'min_samples_split': 2, 'n_estimators': 100, 'min_samples_leaf': 10},
  mean: -0.13675, std: 0.00186, params: {'max_features': 'sqrt', 'min_samples_split': 2, 'n_estimators': 250, 'min_samples_leaf': 10},
@@ -230,6 +230,6 @@ x, y = datasets.make_regression(n_samples=50000, n_features=25, n_targets=35)
 rf.fit(x, y)
 
 import run
-a = run.RandomForestModel(estimator_params={'n_estimators':100}, n_jobs=3)
+a = run.RandomForestModel(n_jobs=8)
 a.train_x = a.build_train_predictors()
 a.fit_estimator()

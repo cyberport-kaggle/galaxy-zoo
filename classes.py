@@ -6,11 +6,8 @@ Classes for Galaxy Zoo
 from __future__ import division
 from functools import wraps
 from scipy import misc
-from skimage import color
 import numpy as np
 from matplotlib import pyplot
-import time
-from sklearn import grid_search, cross_validation
 from sklearn.metrics import mean_squared_error, make_scorer
 from constants import *
 import os
@@ -19,7 +16,6 @@ from sklearn.linear_model import Ridge
 from skimage.transform import rescale
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.base import BaseEstimator
-from sklearn.cross_validation import KFold
 
 logger = logging.getLogger('galaxy')
 logger.setLevel(logging.DEBUG)
@@ -117,7 +113,7 @@ class TrainSolutions(object):
 train_solutions = TrainSolutions()
 
 
-def rmse(y_true, y_pred):
+def rmse(y_true, y_pred, detail=False):
     """
     Calculates rmse for two numpy arrays
     """
@@ -292,200 +288,6 @@ class RawImage(object):
     @property
     def average_intensity(self):
         return self.data.mean()
-
-
-class BaseModel(object):
-    # Filenames used to store the feature arrays used in fitting/predicting
-    """
-    Base model for training models.
-    Rationale for having a class structure for models is so that we can:
-      1) Do some standard utility things like timing
-      2) Easily vary our models.  For example, if we have a model, and we want to have a variant that uses slightly different
-         predictors, we can just subclass and override that part of the run function
-    """
-    # This is so that we don't have to iterate over all 70k images every time we fit.
-    train_predictors_file = None
-    test_predictors_file = None
-    # Number of features that the model will generate
-    n_features = None
-
-    def __init__(self, *args, **kwargs):
-        self.train_x = None
-        self.train_y = train_solutions.data
-        self.test_x = None
-        self.estimator = None
-        self.estimator_params = kwargs.get('estimator_params', {})
-        # Parameters for the grid search
-        self.grid_search_parameters = kwargs.get('grid_search_parameters', None)
-        self.grid_search_estimator = None
-        # Sample to use for the grid search.  Should be between 0 and 1
-        self.grid_search_sample = kwargs.get('grid_search_sample', None)
-        # Parameters for CV
-        self.cv_folds = kwargs.get('cv_folds', 3)
-        self.cv_sample = kwargs.get('cv_sample', None)
-        # Parallelization
-        self.n_jobs = kwargs.get('n_jobs', 1)
-
-    def do_for_each_image(self, files, func, n_features, training):
-        """
-        Function that iterates over a list of files, applying func to the image indicated by that function.
-        Returns an (n_samples, n_features) ndarray
-        """
-        dims = (N_TRAIN if training else N_TEST, n_features)
-        predictors = np.zeros(dims)
-        counter = 0
-        for row, f in enumerate(files):
-            filepath = TRAIN_IMAGE_PATH if training else TEST_IMAGE_PATH
-            image = RawImage(os.path.join(filepath, f))
-            predictors[row] = func(image)
-            counter += 1
-            if counter % 1000 == 0:
-                logger.info("Processed {} images".format(counter))
-        return predictors
-
-    def build_features(self, files, training=True):
-        """
-        Utility method that loops over every image and applies self.process_image
-        Returns a numpy array of dimensions (n_observations, n_features)
-        """
-        logger.info("Building predictors")
-        predictors = self.do_for_each_image(files, self.process_image, self.n_features, training)
-        return predictors
-
-    def build_train_predictors(self):
-        """
-        Builds the training predictors.  Once the predictors are built, they are cached to a file.
-        If the file already exists, the predictors are loaded from file.
-        Couldn't use the @cache_to_file decorator because the decorator factory doesn't have access to self at compilation
-
-        Returns:
-            A numpy array of shape (n_train, n_features)
-        """
-        file_list = train_solutions.filenames
-        if os.path.exists(self.train_predictors_file):
-            logger.info("Training predictors already exists, loading from file {}".format(self.train_predictors_file))
-            res = np.load(self.train_predictors_file)
-        else:
-            res = self.build_features(file_list, True)
-            logger.info("Caching training predictors to {}".format(self.train_predictors_file))
-            np.save(self.train_predictors_file, res)
-        return res
-
-    def build_test_predictors(self):
-        """
-        Builds the test predictors
-
-        Returns:
-            A numpy array of shape (n_test, n_features)
-        """
-        test_files = sorted(os.listdir(TEST_IMAGE_PATH))
-        if os.path.exists(self.test_predictors_file):
-            logger.info("Test predictors already exists, loading from file {}".format(self.test_predictors_file))
-            res = np.load(self.test_predictors_file)
-        else:
-            res = self.build_features(test_files, False)
-            logger.info("Caching test predictors to {}".format(self.test_predictors_file))
-            np.save(self.test_predictors_file, res)
-        return res
-
-    def perform_grid_search_and_cv(self, *args, **kwargs):
-        """
-        Performs cross validation and grid search to identify optimal parameters and to score the estimator
-        The grid search space is defined by self.grid_search_parameters.
-
-        If grid_search_sample is defined, then a downsample of the full train_x is used to perform the grid search
-        """
-        if self.grid_search_parameters is not None:
-            logging.info("Performing grid search")
-            start_time = time.time()
-            self.grid_search_estimator = grid_search.GridSearchCV(self.get_estimator(),
-                                                                  self.grid_search_parameters,
-                                                                  scoring=rmse_scorer, verbose=3, **kwargs)
-            if self.grid_search_sample is not None:
-                logging.info("Using {} of the train set for grid search".format(self.grid_search_sample))
-                # Downsample if a sampling rate is defined
-                self.grid_search_estimator.refit = False
-                self.grid_search_x, \
-                self.grid_search_x_test, \
-                self.grid_search_y, \
-                self.grid_search_y_test = cross_validation.train_test_split(self.train_x,
-                                                                            self.train_y,
-                                                                            train_size=self.grid_search_sample)
-            else:
-                logging.info("Using full train set for the grid search")
-                # Otherwise use the full set
-                self.grid_search_x = self.train_x
-                self.grid_search_y = self.train_y
-            self.grid_search_estimator.fit(self.grid_search_x, self.grid_search_y)
-            logger.info("Grid search completed in {}".format(time.time() - start_time))
-
-    def perform_cross_validation(self, *args, **kwargs):
-        """
-        Performs cross validation using the main estimator.  In some cases, when we don't need to search
-        across a grid of hyperparameters, we may want to perform cross validation only.
-        """
-        start_time = time.time()
-        if self.cv_sample is not None:
-            logging.info("Performing {}-fold cross validation with {:.0%} of the sample".format(self.cv_folds, self.cv_sample))
-            self.cv_x,\
-            self.cv_x_test,\
-            self.cv_y,\
-            self.cv_y_test = cross_validation.train_test_split(self.train_x, self.train_y, train_size=self.cv_sample)
-        else:
-            logging.info("Performing {}-fold cross validation with full training set".format(self.cv_folds))
-            self.cv_x = self.train_x
-            self.cv_y = self.train_y
-        self.cv_iterator = cross_validation.KFold(self.cv_x.shape[0], n_folds=self.cv_folds)
-        self.cv_scores = cross_validation.cross_val_score(self.get_estimator(),
-                                                          self.cv_x,
-                                                          self.cv_y,
-                                                          cv=self.cv_iterator,
-                                                          scoring=rmse_scorer, verbose=2)
-        logger.info("Cross validation completed in {}.  Scores:".format(time.time() - start_time))
-        logger.info("{}".format(self.cv_scores))
-
-    def run(self):
-        start_time = time.time()
-
-        res = self.execute()
-        # A general workflow for a model would be as follows:
-        # 1) Generate the features by iterating over each image
-        # 3) Perform Grid Search and CV to get the best model
-        # 4) Fit the best estimator on the full dataset
-        # 5) Use the estimator to predict on the test set
-
-        end_time = time.time()
-        logger.info("Model completed in {}".format(end_time - start_time))
-        return res
-
-    def predict_test(self):
-        self.test_y = self.estimator.predict(self.test_x)
-        return self.test_y
-
-    def fit_estimator(self):
-        start_time = time.time()
-        logger.info("Fitting estimator")
-        self.estimator = self.get_estimator(**self.estimator_params)
-        self.estimator.fit(self.train_x, self.train_y)  # Train only on class 1 responses for now
-        logger.info("Finished fitting model in {}".format(time.time() - start_time))
-
-    def execute(self):
-        raise NotImplementedError("Don't use the base class")
-
-    def get_estimator(self, **kwargs):
-        """
-        Returns a Scikit-learn estimator used in the final model.
-        Subclasses should implement this method
-        """
-        raise NotImplementedError("Subclasses of BaseModel should implement get_estimator")
-
-    @staticmethod
-    def process_image(img):
-        """
-        A function that takes a RawImage object and returns a (1, n_features) numpy array
-        Subclasses should implement this method
-        """
-        raise NotImplementedError("Subclasses of BaseModel should implement process_image")
 
 
 class RidgeClipped(Ridge):
