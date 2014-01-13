@@ -437,10 +437,9 @@ class BaseModel(object):
                                                           self.cv_x,
                                                           self.cv_y,
                                                           cv=self.cv_iterator,
-                                                          scoring=rmse_scorer, verbose=2, n_jobs=2)
+                                                          scoring=rmse_scorer, verbose=2)
         logger.info("Cross validation completed in {}.  Scores:".format(time.time() - start_time))
         logger.info("{}".format(self.cv_scores))
-
 
     def run(self):
         start_time = time.time()
@@ -456,6 +455,17 @@ class BaseModel(object):
         logger.info("Model completed in {}".format(end_time - start_time))
         return res
 
+    def predict_test(self):
+        self.test_y = self.estimator.predict(self.test_x)
+        return self.test_y
+
+    def fit_estimator(self):
+        start_time = time.time()
+        logger.info("Fitting estimator")
+        self.estimator = self.get_estimator()
+        self.estimator.fit(self.train_x, self.train_y)  # Train only on class 1 responses for now
+        logger.info("Finished fitting model in {}".format(time.time() - start_time))
+
     def execute(self):
         raise NotImplementedError("Don't use the base class")
 
@@ -465,6 +475,7 @@ class BaseModel(object):
         Subclasses should implement this method
         """
         raise NotImplementedError("Subclasses of BaseModel should implement get_estimator")
+
     @staticmethod
     def process_image(img):
         """

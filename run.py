@@ -129,28 +129,16 @@ class RandomForestModel(classes.BaseModel):
         return img.grid_sample(20, 2).flatten().astype('float64') / 255
 
     def get_estimator(self):
-        classifier = RandomForestRegressor(n_estimators=250, random_state=0, verbose=3, oob_score=True)
+        classifier = RandomForestRegressor(n_estimators=250, random_state=0, verbose=3, oob_score=True, n_jobs=3)
         return classifier
-
-    def fit_estimator(self):
-        start_time = time.time()
-        random.seed(0)
-        logger.info("Fitting random forest estimator")
-        self.estimator = self.get_estimator()
-        self.estimator.fit(self.train_x, self.train_y)  # Train only on class 1 responses for now
-        logger.info("Finished fitting model in {}".format(time.time() - start_time))
-
-    def predict_test(self):
-        self.test_y = self.estimator.predict(self.test_x)
-        return self.test_y
 
     def execute(self):
         self.train_x = self.build_train_predictors()
         self.fit_estimator()
 
         # Get an in sample RMSE
-        training_predict = self.estimator.predict(self.train_x[self.sample, :])
-        rmse = classes.rmse(training_predict, self.train_y[self.sample, :])
+        training_predict = self.estimator.predict(self.train_x)
+        rmse = classes.rmse(training_predict, self.train_y)
 
         self.test_x = self.build_test_predictors()
         return self.predict_test()
@@ -160,7 +148,8 @@ def random_forest_001(outfile="sub_random_forest_001.csv"):
     """
     First attempt at implementing a neural network.
     Uses a sample of central pixels in RGB space to feed in as inputs to the neural network
-    Model is not tuned or CV'd, which are to be implemented in later models.
+
+    # 3-fold CV using half the training set reports RMSE of .126 or so
     """
     model = RandomForestModel()
     predictions = model.run()
