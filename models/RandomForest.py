@@ -18,8 +18,3 @@ class RandomForestModel(BaseModel):
     @staticmethod
     def process_image(img):
         return img.grid_sample(20, 2).flatten().astype('float64') / 255
-
-    def execute(self):
-        self.build_train_predictors()
-
-

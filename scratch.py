@@ -214,22 +214,3 @@ Out[11]: -0.13285532108270079
  mean: -0.14187, std: 0.00208, params: {'max_features': 'auto', 'min_samples_split': 100, 'n_estimators': 250, 'min_samples_leaf': 50}]
 
  """
-
-import run
-a = run.RandomForestModel(cv_sample=0.5)
-a.train_x = a.build_train_predictors()
-
-# Troubleshooting scikit parallel processing
-
-from sklearn import datasets
-import numpy as np
-from sklearn import ensemble
-
-rf = ensemble.RandomForestRegressor(n_estimators=250, random_state=0, verbose=3, oob_score=True, n_jobs=3)
-x, y = datasets.make_regression(n_samples=50000, n_features=25, n_targets=35)
-rf.fit(x, y)
-
-import run
-a = run.RandomForestModel(n_jobs=8)
-a.train_x = a.build_train_predictors()
-a.fit_estimator()

@@ -56,16 +56,31 @@ class BaseModel(object):
     The main entry point for performing operations is run().  Run's first argument must be a string that is one of the following
 
     grid_search:
-        Performs grid search
+        Performs grid search with sklearn's GridSearchCV.
+
+        If grid_search_sample is set, then the training set is downsampled before feeding into the grid search.  The grid search
+        set is saved to grid_search_x and grid_search_y, while the holdout is saved to grid_search_x_test and grid_search_y_test.
+
+        *args and **kwargs passed to run are passed to instantiating GridSearchCV
 
     cv:
-        Performs cross_validation
+        Performs 2-fold cross validation by default (to preserve ratios of train/test sample sizes).
+
+        If cv_sample is set, then the training set is downsampled before performing cv.  CV set is then saved to cv_x and cv_y,
+        while the holdout is saved to cv_x_test and cv_y_test
+
+        You can override the number of folds by setting self.cv_folds.  The KFold CV iterator can also be overriden by
+        setting self.cv_class
+
+        *args and **kwargs passed to run are passed to the cross_val_score function
 
     train:
-        Fits the model
+        Fits the estimator on the full training set and prints an in-sample RMSE
+
+        Does not take any additional arguments
 
     predict:
-        Predicts on the test set
+        Predicts on the test set.  Does not take any additional arguments
 
 
     """
@@ -76,6 +91,8 @@ class BaseModel(object):
     n_features = None
     estimator_defaults = None
     estimator_class = None
+    grid_search_class = grid_search.GridSearchCV
+    cv_class = cross_validation.KFold
 
     def __init__(self, *args, **kwargs):
         # Prime some parameters that will be defined later
@@ -90,7 +107,7 @@ class BaseModel(object):
         # Sample to use for the grid search.  Should be between 0 and 1
         self.grid_search_sample = kwargs.get('grid_search_sample', None)
         # Parameters for CV
-        self.cv_folds = kwargs.get('cv_folds', 3)
+        self.cv_folds = kwargs.get('cv_folds', 2)
         self.cv_sample = kwargs.get('cv_sample', None)
         # Parallelization
         self.n_jobs = kwargs.get('n_jobs', 1)
@@ -117,9 +134,9 @@ class BaseModel(object):
         return predictors
 
     def get_estimator(self):
-        params = self.estimator_defaults
+        params = self.estimator_defaults.copy()
         params.update(self.estimator_params)
-        classifier = self.estimator(**params)
+        classifier = self.estimator_class(**params)
         return classifier
 
     def build_features(self, files, training=True):
@@ -175,17 +192,29 @@ class BaseModel(object):
         The grid search space is defined by self.grid_search_parameters.
 
         If grid_search_sample is defined, then a downsample of the full train_x is used to perform the grid search
+
+        Cross validation is parallelized at the CV level, not the estimator level, because not all estimators
+        can be parallelized.
         """
         if self.grid_search_parameters is not None:
             logger.info("Performing grid search")
             start_time = time.time()
-            self.grid_search_estimator = grid_search.GridSearchCV(self.estimator,
-                                                                  self.grid_search_parameters,
-                                                                  scoring=rmse_scorer, verbose=3, **kwargs)
+            params = {
+                'scoring': rmse_scorer,
+                'verbose': 3,
+                'refit': False,
+                'n_jobs': self.n_jobs
+            }
+            params.update(kwargs)
+            # Make sure to not parallelize the estimator if it can be parallelized
+            if 'n_jobs' in self.estimator.get_params().keys():
+                self.estimator.set_params(n_jobs=1)
+            self.grid_search_estimator = self.grid_search_class(self.estimator,
+                                                                self.grid_search_parameters,
+                                                                *args, **params)
             if self.grid_search_sample is not None:
                 logger.info("Using {} of the train set for grid search".format(self.grid_search_sample))
                 # Downsample if a sampling rate is defined
-                self.grid_search_estimator.refit = False
                 self.grid_search_x, \
                 self.grid_search_x_test, \
                 self.grid_search_y, \
@@ -216,26 +245,44 @@ class BaseModel(object):
             logger.info("Performing {}-fold cross validation with full training set".format(self.cv_folds))
             self.cv_x = self.train_x
             self.cv_y = self.train_y
-        self.cv_iterator = cross_validation.KFold(self.cv_x.shape[0], n_folds=self.cv_folds)
+        self.cv_iterator = self.cv_class(self.cv_x.shape[0], n_folds=self.cv_folds)
+        params = {
+            'cv': self.cv_iterator,
+            'scoring': rmse_scorer,
+            'verbose': 2,
+            'n_jobs': self.n_jobs
+        }
+        params.update(kwargs)
+        # Make sure to not parallelize the estimator
+        if 'n_jobs' in self.estimator.get_params().keys():
+            self.estimator.set_params(n_jobs=1)
         self.cv_scores = cross_validation.cross_val_score(self.estimator,
                                                           self.cv_x,
                                                           self.cv_y,
-                                                          cv=self.cv_iterator,
-                                                          scoring=rmse_scorer, verbose=2)
+                                                          *args, **params)
         logger.info("Cross validation completed in {}.  Scores:".format(time.time() - start_time))
         logger.info("{}".format(self.cv_scores))
 
-    def fit(self):
-        self.fit_estimator()
+    def train(self):
+        start_time = time.time()
+        logger.info("Fitting estimator")
+        if 'n_jobs' in self.estimator.get_params().keys():
+            self.estimator.set_params(n_jobs=self.n_jobs)
+        self.estimator.fit(self.train_x, self.train_y)  # Train only on class 1 responses for now
+        logger.info("Finished fitting model in {}".format(time.time() - start_time))
+
         # Get an in sample RMSE
         logger.info("Calculating in-sample RMSE")
-        training_predict = self.estimator.predict(self.train_x)
-        self.rmse = rmse(training_predict, self.train_y)
+        self.training_predict = self.estimator.predict(self.train_x)
+        self.rmse = rmse(self.training_predict, self.train_y)
         return self.estimator
 
     def predict(self):
         self.build_test_predictors()
-        return self.predict_test()
+        if 'n_jobs' in self.estimator.get_params().keys():
+            self.estimator.set_params(n_jobs=self.n_jobs)
+        self.test_y = self.estimator.predict(self.test_x)
+        return self.test_y
 
     def run(self, method, *args, **kwargs):
         """
@@ -260,31 +307,21 @@ class BaseModel(object):
             raise RuntimeError("{} is not a valid job".format(method))
 
         start_time = time.time()
-        # Prime the data
         self.build_train_predictors()
-        self.build_test_predictors()
+        res = None
 
         if method == 'grid_search':
-            pass
+            res = self.perform_grid_search_and_cv(*args, **kwargs)
         elif method == 'cv':
-            pass
+            res = self.perform_cross_validation(*args, **kwargs)
         elif method == 'train':
-            pass
+            res = self.train()
         elif method == 'predict':
-            pass
+            res = self.predict()
 
         end_time = time.time()
         logger.info("Model completed in {}".format(end_time - start_time))
-
-    def predict_test(self):
-        self.test_y = self.estimator.predict(self.test_x)
-        return self.test_y
-
-    def fit_estimator(self):
-        start_time = time.time()
-        logger.info("Fitting estimator")
-        self.estimator.fit(self.train_x, self.train_y)  # Train only on class 1 responses for now
-        logger.info("Finished fitting model in {}".format(time.time() - start_time))
+        return res
 
     @staticmethod
     def process_image(img):
