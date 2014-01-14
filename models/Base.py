@@ -111,7 +111,6 @@ class BaseModel(object):
         self.cv_sample = kwargs.get('cv_sample', None)
         # Parallelization
         self.n_jobs = kwargs.get('n_jobs', 1)
-
         # Preload data
         self.train_y = train_solutions.data
         self.estimator = self.get_estimator()
@@ -311,12 +310,16 @@ class BaseModel(object):
         res = None
 
         if method == 'grid_search':
+            logger.info("Performing grid search")
             res = self.perform_grid_search_and_cv(*args, **kwargs)
         elif method == 'cv':
+            logger.info("Performing cross validation")
             res = self.perform_cross_validation(*args, **kwargs)
         elif method == 'train':
+            logger.info("Performing training")
             res = self.train()
         elif method == 'predict':
+            logger.info("Performing prediction")
             res = self.predict()
 
         end_time = time.time()

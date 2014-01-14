@@ -93,7 +93,7 @@ def ridge_regression():
         if (row % 10) == 0: print row
 
     pca = RandomizedPCA(1000, whiten=True)
-    rgn = classes.RidgeClipped()
+    rgn = models.Ridge.RidgeClipped()
 
     pca_ridge = Pipeline([('ridge', rgn)])
 
@@ -104,6 +104,11 @@ def ridge_regression():
     grid_search.fit(train_x, train_y)
 
     return grid_search
+
+
+def ridge_rf_001(outfile='sub_ridge_rf_001.csv'):
+    mdl = models.Ridge.RidgeRFModel(cv_sample=0.5, cv_folds=2, n_jobs=2)
+    mdl.run('cv')
 
 
 def ridge_rf():
@@ -126,7 +131,7 @@ def ridge_rf():
         train_x[row] = img.data
         if (row % 10) == 0: print row
 
-    ridge_rf = classes.RidgeRF()
+    ridge_rf = models.Ridge.RidgeRFEstimator()
 
     parameters = {'alpha': [14], 'n_estimators': [10]}
 

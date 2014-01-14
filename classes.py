@@ -2,20 +2,19 @@
 Classes for Galaxy Zoo
 """
 
-
 from __future__ import division
 from functools import wraps
+import os
+import logging
+
 from scipy import misc
 import numpy as np
 from matplotlib import pyplot
 from sklearn.metrics import mean_squared_error, make_scorer
-from constants import *
-import os
-import logging
-from sklearn.linear_model import Ridge
 from skimage.transform import rescale
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.base import BaseEstimator
+
+from constants import *
+
 
 logger = logging.getLogger('galaxy')
 logger.setLevel(logging.DEBUG)
@@ -288,30 +287,3 @@ class RawImage(object):
     @property
     def average_intensity(self):
         return self.data.mean()
-
-
-class RidgeClipped(Ridge):
-    def predict(self, X):
-        pred = super(RidgeClipped, self).predict(X)
-
-        # clip predictions to 0 and 1.
-        pred[pred > 1] = 1
-        pred[pred < 0] = 0
-
-        return pred
-
-
-# Do ridge regression and then random forest
-class RidgeRF(BaseEstimator):
-    def __init__(self, alpha=1.0, n_estimators=10):
-        self.ridge_rgn = Ridge(alpha=14.0)
-        self.rf_rgn = RandomForestRegressor(n_estimators=100)
-
-    def fit(self, X, y):
-        self.ridge_rgn.fit(X, y)
-        ridge_y = self.ridge_rgn.predict(X)
-        self.rf_rgn.fit(ridge_y, y)
-
-    def predict(self, X):
-        ridge_y = self.ridge_rgn.predict(X)
-        return self.rf_rgn.predict(ridge_y)
