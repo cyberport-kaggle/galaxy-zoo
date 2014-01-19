@@ -80,7 +80,7 @@ def extra_trees_test(n_jobs=1):
         grid_search_sample=0.5,
         n_jobs=n_jobs
     )
-    model.run('grid_search')
+    model.run('grid_search', refit=True)
 
 
 def random_forest_cascade_test():

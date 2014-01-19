@@ -197,7 +197,7 @@ class BaseModel(object):
 
         Parameters:
         ----------
-        holdout_score: boolean, default True
+        refit: boolean, default True
             If true, the grid search estimator is refit on the grid search set, and then is used to calculate a score
             on the holdout set.
 
@@ -213,13 +213,15 @@ class BaseModel(object):
             params = {
                 'scoring': rmse_scorer,
                 'verbose': 3,
-                'refit': kwargs.get('holdout_score', True),
-                'n_jobs': self.n_jobs
+                'refit':  True,
+                'n_jobs': self.n_jobs,
+                'cv': 2
             }
             params.update(kwargs)
             # Make sure to not parallelize the estimator if it can be parallelized
             if 'n_jobs' in self.estimator.get_params().keys():
                 self.estimator.set_params(n_jobs=1)
+
             self.grid_search_estimator = self.grid_search_class(self.estimator,
                                                                 self.grid_search_parameters,
                                                                 *args, **params)
@@ -241,7 +243,7 @@ class BaseModel(object):
             logger.info("Found best parameters:")
             logger.info(self.grid_search_estimator.best_params_)
 
-            if kwargs.get('holdout_score', True):
+            if params['refit']:
                 logger.info("Predicting on holdout set")
                 pred = self.grid_search_estimator.predict(self.grid_search_x_test)
                 res = rmse(self.grid_search_y_test, pred)
