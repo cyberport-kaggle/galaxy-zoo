@@ -201,7 +201,7 @@ class BaseModel(object):
             params = {
                 'scoring': rmse_scorer,
                 'verbose': 3,
-                'refit': False,
+                'refit': True,
                 'n_jobs': self.n_jobs
             }
             params.update(kwargs)
@@ -226,6 +226,12 @@ class BaseModel(object):
                 self.grid_search_x = self.train_x
                 self.grid_search_y = self.train_y
             self.grid_search_estimator.fit(self.grid_search_x, self.grid_search_y)
+            logger.info("Found best parameters:")
+            logger.info(self.grid_search_estimator.best_params_)
+            logger.info("Predicting on holdout set")
+            pred = self.grid_search_estimator.predict(self.grid_search_x_test)
+            res = rmse(self.grid_search_y_test, pred)
+            logger.info("RMSE on holdout set: {}".format(res))
             logger.info("Grid search completed in {}".format(time.time() - start_time))
 
     def perform_cross_validation(self, *args, **kwargs):

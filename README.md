@@ -4,6 +4,7 @@
 
   - Implement parallelization in do_for_each_image
   - Implement cascade training - training classes in sequence and feeding the results of earlier classes into the models for later classes
+  - Grid search on ExtraTreesModel
 
 
 ## Current Models
