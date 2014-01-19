@@ -9,7 +9,7 @@ class GridSample75Mixin(object):
         return img.grid_sample(20, 2).flatten().astype('float64') / 255
 
 
-class RandomForestModel(BaseModel, GridSample75Mixin):
+class RandomForestModel(GridSample75Mixin, BaseModel):
     train_predictors_file = 'data/data_random_forest_train_001.npy'
     test_predictors_file = 'data/data_random_forest_test_001.npy'
     n_features = 75
@@ -22,7 +22,7 @@ class RandomForestModel(BaseModel, GridSample75Mixin):
     estimator_class = ensemble.RandomForestRegressor
 
 
-class ExtraTreesModel(BaseModel, GridSample75Mixin):
+class ExtraTreesModel(GridSample75Mixin, BaseModel):
     train_predictors_file = 'data/data_random_forest_train_001.npy'
     test_predictors_file = 'data/data_random_forest_test_001.npy'
     n_features = 75
@@ -30,5 +30,5 @@ class ExtraTreesModel(BaseModel, GridSample75Mixin):
         'n_estimators': 15,
         'random_state': 0,
         'verbose': 3,
-        }
+    }
     estimator_class = ensemble.ExtraTreesRegressor
