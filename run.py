@@ -44,7 +44,7 @@ def central_pixel_benchmark(outfile="sub_central_pixel_001.csv"):
     and then assigns the associated probability values to like-colored images in the test set.
     """
 
-    test_averages = models.Benchmarks.CentralPixelBenchmark().run()
+    test_averages = models.Benchmarks.CentralPixelBenchmark().execute()
     predictions = classes.Submission(test_averages)
     # Write to file
     predictions.to_file(outfile)
@@ -58,9 +58,29 @@ def random_forest_001(outfile="sub_random_forest_001.csv", n_jobs=1):
     # 3-fold CV using half the training set reports RMSE of .126 or so
     """
     model = models.RandomForest.RandomForestModel(n_jobs=n_jobs)
-    predictions = model.run()
+    model.run('train')
+    predictions = model.run('predict')
     output = classes.Submission(predictions)
     output.to_file(outfile)
+
+
+def extra_trees_test(n_jobs=1):
+    """
+    Exact same as random_forest_001, but using ExtraTreesRegressor to see if that method is any better
+    """
+    # model = models.RandomForest.ExtraTreesModel()
+    # model.run('cv')
+
+    # tune the model - 15 trees already gives .13 RMSE, I think that's slightly better than RF with that number of trees
+    params = {
+        'n_estimators': [15, 50, 100, 250]
+    }
+    model = models.RandomForest.ExtraTreesModel(
+        grid_search_parameters=params,
+        grid_search_sample=0.5,
+        n_jobs=n_jobs
+    )
+    model.run('grid_search')
 
 
 def random_forest_cascade_test():

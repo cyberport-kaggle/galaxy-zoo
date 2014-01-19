@@ -108,7 +108,7 @@ class BaseModel(object):
         self.grid_search_sample = kwargs.get('grid_search_sample', None)
         # Parameters for CV
         self.cv_folds = kwargs.get('cv_folds', 2)
-        self.cv_sample = kwargs.get('cv_sample', None)
+        self.cv_sample = kwargs.get('cv_sample', 0.5)
         # Parallelization
         self.n_jobs = kwargs.get('n_jobs', 1)
         # Preload data
