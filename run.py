@@ -107,35 +107,9 @@ def ridge_regression():
 
 
 def ridge_rf_001(outfile='sub_ridge_rf_001.csv'):
-    mdl = models.Ridge.RidgeRFModel(cv_sample=0.5, cv_folds=2, n_jobs=2)
+    mdl = models.Ridge.RidgeRFModel(cv_sample=0.5, cv_folds=2)
     mdl.run('cv')
-
-
-def ridge_rf():
-# read train Y
-    train_y = classes.train_solutions.data
-
-    # randomly sample 10% Y and select the gid's
-    n = 7000
-    crop_size = 150
-    scale = 0.1
-    train_y = train_y[np.random.randint(train_y.shape[0], size=n), :]
-    train_x = np.zeros((n, (crop_size * scale) ** 2 * 3))
-
-    # load the training images and crop at the same time
-    for row, gid in enumerate(classes.train_solutions.filenames):
-        img = classes.RawImage('data/images_training_rev1/' + str(int(gid)) + '.jpg')
-        img.crop(crop_size)
-        img.rescale(scale)
-        img.flatten()
-        train_x[row] = img.data
-        if (row % 10) == 0: print row
-
-    ridge_rf = models.Ridge.RidgeRFEstimator()
-
-    parameters = {'alpha': [14], 'n_estimators': [10]}
-
-    grid_search = GridSearchCV(ridge_rf, parameters, cv=2, n_jobs=1, scoring='mean_squared_error', refit=False)
-    grid_search.fit(train_x, train_y)
-
-    return grid_search
+    mdl.run('train')
+    mdl.run('predict')
+    sub = classes.Submission(mdl.test_y)
+    sub.to_file(outfile)
