@@ -194,6 +194,18 @@ class BaseModel(object):
 
         Cross validation is parallelized at the CV level, not the estimator level, because not all estimators
         can be parallelized.
+
+        Parameters:
+        ----------
+        holdout_score: boolean, default True
+            If true, the grid search estimator is refit on the grid search set, and then is used to calculate a score
+            on the holdout set.
+
+            Really only useful if grid_search_sample < 1, otherwise the calculated score will basically be an in-sample
+            error (since the training and the testing were the same dataset)
+
+        grid_search_parameters: set on model instantiation
+            The grid search parameters -- should set this when you instantiate the Model, not when you call run('grid_search')
         """
         if self.grid_search_parameters is not None:
             logger.info("Performing grid search")
@@ -201,7 +213,7 @@ class BaseModel(object):
             params = {
                 'scoring': rmse_scorer,
                 'verbose': 3,
-                'refit': True,
+                'refit': kwargs.get('holdout_score', True),
                 'n_jobs': self.n_jobs
             }
             params.update(kwargs)
@@ -223,15 +235,18 @@ class BaseModel(object):
             else:
                 logger.info("Using full train set for the grid search")
                 # Otherwise use the full set
-                self.grid_search_x = self.train_x
-                self.grid_search_y = self.train_y
+                self.grid_search_x = self.grid_search_x_test = self.train_x
+                self.grid_search_y = self.grid_search_y_test = self.train_y
             self.grid_search_estimator.fit(self.grid_search_x, self.grid_search_y)
             logger.info("Found best parameters:")
             logger.info(self.grid_search_estimator.best_params_)
-            logger.info("Predicting on holdout set")
-            pred = self.grid_search_estimator.predict(self.grid_search_x_test)
-            res = rmse(self.grid_search_y_test, pred)
-            logger.info("RMSE on holdout set: {}".format(res))
+
+            if kwargs.get('holdout_score', True):
+                logger.info("Predicting on holdout set")
+                pred = self.grid_search_estimator.predict(self.grid_search_x_test)
+                res = rmse(self.grid_search_y_test, pred)
+                logger.info("RMSE on holdout set: {}".format(res))
+
             logger.info("Grid search completed in {}".format(time.time() - start_time))
 
     def perform_cross_validation(self, *args, **kwargs):
@@ -268,7 +283,7 @@ class BaseModel(object):
         logger.info("Cross validation completed in {}.  Scores:".format(time.time() - start_time))
         logger.info("{}".format(self.cv_scores))
 
-    def train(self):
+    def train(self, *args, **kwargs):
         start_time = time.time()
         logger.info("Fitting estimator")
         if 'n_jobs' in self.estimator.get_params().keys():
@@ -282,7 +297,7 @@ class BaseModel(object):
         self.rmse = rmse(self.training_predict, self.train_y)
         return self.estimator
 
-    def predict(self):
+    def predict(self, *args, **kwargs):
         self.build_test_predictors()
         if 'n_jobs' in self.estimator.get_params().keys():
             self.estimator.set_params(n_jobs=self.n_jobs)
@@ -323,10 +338,10 @@ class BaseModel(object):
             res = self.perform_cross_validation(*args, **kwargs)
         elif method == 'train':
             logger.info("Performing training")
-            res = self.train()
+            res = self.train(*args, **kwargs)
         elif method == 'predict':
             logger.info("Performing prediction")
-            res = self.predict()
+            res = self.predict(*args, **kwargs)
 
         end_time = time.time()
         logger.info("Model completed in {}".format(end_time - start_time))
