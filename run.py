@@ -81,6 +81,15 @@ def extra_trees_test(n_jobs=1):
         n_jobs=n_jobs
     )
     model.run('grid_search', refit=True)
+    # 2014-01-21 05:45:28 - Base - INFO - Found best parameters:
+    # 2014-01-21 05:45:28 - Base - INFO - {'n_estimators': 250}
+    # 2014-01-21 05:45:28 - Base - INFO - Predicting on holdout set
+    # 2014-01-21 05:45:41 - classes - INFO - RMSE: 0.124530683233
+    # 2014-01-21 05:45:41 - Base - INFO - RMSE on holdout set: 0.124530683233
+    # 2014-01-21 05:45:41 - Base - INFO - Grid search completed in 8916.21896791
+    # 2014-01-21 05:45:41 - Base - INFO - Model completed in 9332.45440102
+
+    # As expected, more trees = better performance.  Seems like the performance is on par/slightly better than random forest
 
 
 def random_forest_cascade_test():
