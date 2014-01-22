@@ -92,12 +92,12 @@ def extra_trees_test(n_jobs=1):
     # As expected, more trees = better performance.  Seems like the performance is on par/slightly better than random forest
 
 
-def random_forest_cascade_test():
+def random_forest_cascade_001(outfile='sub_rf_cascade_001.csv'):
     """
     Experiment to compare whether training the random forest with all Ys or training the Ys in a cascade is better
     """
-    mdl_cascade = models.RandomForest.RandomForestCascadeModel()
-    mdl_cascade.run('train')
+    mdl = models.RandomForest.RandomForestCascadeModel(cv_sample=0.5)
+    mdl.run('cv')
 
 
 def ridge_rf_001(outfile='sub_ridge_rf_001.csv'):

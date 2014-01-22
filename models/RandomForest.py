@@ -27,7 +27,7 @@ class RandomForestCascadeModel(GridSample75Mixin, CascadeModel):
     test_predictors_file = 'data/data_random_forest_test_001.npy'
     n_features = 75
     estimator_defaults = {
-        'n_estimators': 5,
+        'n_estimators': 250,
         'random_state': 0,
         'verbose': 3,
         'oob_score': True,

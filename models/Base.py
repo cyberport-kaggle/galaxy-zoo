@@ -505,3 +505,14 @@ class CascadeModel(BaseModel):
         self.training_predict = preds
         self.rmse = rmse(self.training_predict, self.train_y)
         return self.estimator
+
+    def predict(self, *args, **kwargs):
+        """
+        TO BE IMPLEMENTED
+
+        self.build_test_predictors()
+        if 'n_jobs' in self.estimator.get_params().keys():
+            self.estimator.set_params(n_jobs=self.n_jobs)
+        self.test_y = self.estimator.predict(self.test_x)
+        return self.test_y
+        """
