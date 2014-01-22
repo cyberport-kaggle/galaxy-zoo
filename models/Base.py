@@ -365,12 +365,17 @@ class CascadeModel(BaseModel):
 
     Some additional things that need to be done to make this model better:
         - Follow the structure of the tree instead of just going from classes 1 to 11
-        - Scale the reponses so that each class sums to 100
     """
     def __init__(self, *args, **kwargs):
         super(CascadeModel, self).__init__(*args, **kwargs)
         # Storage for each estimator.  key is the class number, and the value is the estimator object
         self.estimator = dict((cls, self.get_estimator()) for cls in train_solutions.class_map.keys())
+        # Should each class be scaled to 100% before training/predicting?
+        self.scaled = kwargs.get('scaled', False)
+        if self.scaled:
+            # Replace train_y with the scaled version, then later when we predict, we have to be sure to multiply the
+            # predictions by the scale factor for each row
+            self.train_y = train_solutions.get_rebased_columns_for_class()
 
     def perform_cross_validation(self, *args, **kwargs):
         start_time = time.time()
@@ -452,6 +457,25 @@ class CascadeModel(BaseModel):
 
                 train_pred = estimator.predict(this_x)
                 test_pred = estimator.predict(test_x)
+
+                # Scale things back
+                if self.scaled:
+                    # this does not work correctly because cv_y is already split
+                    scale_factors = train_solutions.get_sum_for_class(cls)
+
+                    assert train.shape[0] == scale_factors[0]
+                    assert test.shape[0] == scale_factors[0]
+
+                    train_scale_factors = scale_factors[train]
+                    test_scale_factors = scale_factors[test]
+
+                    assert train_scale_factors.shape[0] == train_pred.shape[0]
+                    assert test_scale_factors.shape[0] == test_pred.shape[0]
+
+                    train_pred = np.multiply(train_pred, train_scale_factors)
+                    test_pred = np.multiply(test_pred, test_scale_factors)
+                    test_y = np.multiply(test_y, test_scale_factors)
+
                 score = rmse(test_y, test_pred)
                 detailed_scores[i][cls] = score
                 logger.info("RMSE on test set for class {}: {}".format(cls, score))
@@ -459,13 +483,19 @@ class CascadeModel(BaseModel):
                 train_preds[:, cols] = train_pred
                 test_preds[:, cols] = test_pred
 
-            fold_rmse = rmse(this_test_y, test_preds)
+            if self.scaled:
+                pass
+            else:
+                fold_rmse = rmse(this_test_y, test_preds)
+
             overall_scores.append(fold_rmse)
             logger.info("Overall score for fold {}: {}".format(i + 1, fold_rmse))
 
         self.cv_scores = np.array(overall_scores)
         logger.info("Cross validation completed in {}.  Scores:".format(time.time() - start_time))
-        logger.info("{}".format(detailed_scores))
+        logger.info(detailed_scores)
+        logger.info("Overall scores:")
+        logger.info(overall_scores)
 
     def train(self, *args, **kwargs):
         start_time = time.time()

@@ -99,16 +99,25 @@ class TrainSolutions(object):
         else:
             return np.ones((self.data.shape[0], 1))
 
-    def get_rebased_columns_for_class(self, cls):
+    def get_rebased_columns_for_class(self, cls=None):
         """
         Returns the columns that correspond to class, but rebased so that the columns sum to 1
         """
-        cols = self.get_columns_for_class(cls)
-        colsums = np.sum(cols, 1, keepdims=True)
-        # We can get some NaNs if some rows sum to 0
-        # If it's 0, instead divide by 1
-        colsums[colsums == 0] = 1
-        return np.true_divide(cols, colsums)
+        if cls:
+            cols = self.get_columns_for_class(cls)
+            colsums = np.sum(cols, 1, keepdims=True)
+            # We can get some NaNs if some rows sum to 0
+            # If it's 0, instead divide by 1
+            colsums[colsums == 0] = 1
+            return np.true_divide(cols, colsums)
+        else:
+            # Return for all classes
+            res = np.zeros(self.data.shape)
+            for i in range(1, 12):
+                col_idxs = self.class_map[i]
+                cols = self.get_rebased_columns_for_class(i)
+                res[:, col_idxs] = cols
+            return res
 
 
 # Keep a single instance for the whole workspace

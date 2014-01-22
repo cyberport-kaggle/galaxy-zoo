@@ -99,10 +99,12 @@ def random_forest_cascade_001(outfile='sub_rf_cascade_001.csv'):
     2014-01-22 10:19:39 - Base - INFO - Cross validation completed in 7038.78176308.  Scores:
     2014-01-22 10:19:39 - Base - INFO - [ 0.13103377  0.13196983]
     """
-    mdl = models.RandomForest.RandomForestCascadeModel(cv_sample=0.5)
+    mdl = models.RandomForest.RandomForestCascadeModel(cv_sample=0.1)
     mdl.run('cv')
 
     # Unscaled classes don't seem to work better than RF.  Lets try with scaled classes
+    mdl_scaled = models.RandomForest.RandomForestCascadeModel(cv_sample=0.1, scaled=True)
+    mdl_scaled.run('cv')
 
 
 def ridge_rf_001(outfile='sub_ridge_rf_001.csv'):
