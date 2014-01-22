@@ -129,12 +129,23 @@ def colwise_rmse(y_true, y_pred):
     """
     Calculates the RMSE for each column of y
     """
-    cols = y_true.shape[1]
-    res = np.zeros(cols)
-    for c in range(0, cols):
+    cols = range(0, y_true.shape[1])
+    res = np.zeros(y_true.shape[1])
+    logger.info("Column-wise RMSEs:")
+    for c in cols:
         res[c] = np.sqrt(mean_squared_error(y_true[:, c], y_pred[:, c]))
+        logger.info("Col {}: {:5f}".format(c, res[c]))
+    return res
 
-    logger.info("RMSE")
+
+def classwise_rmse(y_true, y_pred):
+    res = np.zeros(11)
+    logger.info("Class-wise RMSEs:")
+    for cls in range(1, 12):
+        cols = train_solutions.class_map[cls]
+        res[cls-1] = np.sqrt(mean_squared_error(y_true[:, cols], y_pred[:, cols]))
+        logger.info("Class {}: {:5f}".format(cls, res[cls-1]))
+    return res
 
 
 def get_test_ids():

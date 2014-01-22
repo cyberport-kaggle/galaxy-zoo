@@ -374,6 +374,8 @@ class CascadeModel(BaseModel):
         start_time = time.time()
         logger.info("Fitting estimator")
         preds = np.zeros(self.train_y.shape)
+        # This currently just goes from 1 to 11, but the tree doesn't actually progress in that order.
+        # Maybe experiment with a more fine-grained control over which predictions get passed in
         for cls in range(1, 12):
             cols = train_solutions.class_map[cls]
 
