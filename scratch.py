@@ -214,3 +214,12 @@ Out[11]: -0.13285532108270079
  mean: -0.14187, std: 0.00208, params: {'max_features': 'auto', 'min_samples_split': 100, 'n_estimators': 250, 'min_samples_leaf': 50}]
 
  """
+
+import classes
+import models
+classes.logstream.setLevel(classes.logging.DEBUG)
+a = models.RandomForest.RandomForestCascadeModel()
+a.run('train')
+b = models.RandomForest.RandomForestModel()
+b.estimator.set_params(n_estimators=10)
+b.run('train')

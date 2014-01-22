@@ -135,8 +135,8 @@ class BaseModel(object):
     def get_estimator(self):
         params = self.estimator_defaults.copy()
         params.update(self.estimator_params)
-        classifier = self.estimator_class(**params)
-        return classifier
+        estimator = self.estimator_class(**params)
+        return estimator
 
     def build_features(self, files, training=True):
         """
@@ -290,7 +290,7 @@ class BaseModel(object):
         logger.info("Fitting estimator")
         if 'n_jobs' in self.estimator.get_params().keys():
             self.estimator.set_params(n_jobs=self.n_jobs)
-        self.estimator.fit(self.train_x, self.train_y)  # Train only on class 1 responses for now
+        self.estimator.fit(self.train_x, self.train_y)
         logger.info("Finished fitting model in {}".format(time.time() - start_time))
 
         # Get an in sample RMSE
@@ -356,3 +356,55 @@ class BaseModel(object):
         Subclasses should implement this method
         """
         raise NotImplementedError("Subclasses of BaseModel should implement process_image")
+
+
+class CascadeModel(BaseModel):
+    """
+    A variant of the BaseModel that trains each class in sequence, then uses the predictions from prior classes as inputs
+    into the models for later classes.
+
+    This is experimental
+    """
+    def __init__(self, *args, **kwargs):
+        super(CascadeModel, self).__init__(*args, **kwargs)
+        # Storage for each estimator.  key is the class number, and the value is the estimator object
+        self.estimator = dict((cls, self.get_estimator()) for cls in train_solutions.class_map.keys())
+
+    def train(self, *args, **kwargs):
+        start_time = time.time()
+        logger.info("Fitting estimator")
+        preds = np.zeros(self.train_y.shape)
+        for cls in range(1, 12):
+            cols = train_solutions.class_map[cls]
+
+            # Select the correct estimator, and get the right subsets of the data to use in training
+            logger.info("Fitting estimator for class {}".format(cls))
+            estimator = self.estimator[cls]
+
+            existing_preds = np.any(preds, axis=0)  # Boolean array of which columns are populated in preds
+            # X is concatenated with any predictions that have already been made
+            logger.debug("Adding columns {} of predictions to X".format(np.where(existing_preds)[0]))
+            this_x = np.hstack((self.train_x, preds[:, existing_preds]))
+            this_y = self.train_y[:, cols]
+            logger.debug("X is of shape {}".format(this_x.shape))
+            logger.debug("Y is of shape {}".format(this_y.shape))
+
+            # Train the current estimator
+            if 'n_jobs' in estimator.get_params().keys():
+                estimator.set_params(n_jobs=self.n_jobs)
+            estimator.fit(this_x, this_y)
+
+            # Make predictions with the current estimator, and store those predictions
+            logger.info("Making predictions for class {}".format(cls))
+            y_pred = estimator.predict(this_x)
+            logger.debug("Ypred is of shape {}".format(this_y.shape))
+            logger.info("RMSE of class {} is {}".format(cls, rmse(y_pred, this_y)))
+            preds[:, cols] = y_pred
+
+        logger.info("Finished fitting model in {}".format(time.time() - start_time))
+
+        # Get an in sample RMSE
+        logger.info("Calculating overall in-sample RMSE")
+        self.training_predict = preds
+        self.rmse = rmse(self.training_predict, self.train_y)
+        return self.estimator

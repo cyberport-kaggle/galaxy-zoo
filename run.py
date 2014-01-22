@@ -96,8 +96,8 @@ def random_forest_cascade_test():
     """
     Experiment to compare whether training the random forest with all Ys or training the Ys in a cascade is better
     """
-    mdl_cascade = models.RandomForest.RandomForestModel(cascade=True)
-    mdl_base = models.RandomForest.RandomForestModel()
+    mdl_cascade = models.RandomForest.RandomForestCascadeModel()
+    mdl_cascade.run('train')
 
 
 def ridge_rf_001(outfile='sub_ridge_rf_001.csv'):

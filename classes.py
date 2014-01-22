@@ -112,7 +112,7 @@ class TrainSolutions(object):
 train_solutions = TrainSolutions()
 
 
-def rmse(y_true, y_pred, detail=False):
+def rmse(y_true, y_pred):
     """
     Calculates rmse for two numpy arrays
     """
@@ -123,6 +123,18 @@ def rmse(y_true, y_pred, detail=False):
 
 # Scorer that can be used with Scikit-learn CV
 rmse_scorer = make_scorer(rmse, greater_is_better=False)
+
+
+def colwise_rmse(y_true, y_pred):
+    """
+    Calculates the RMSE for each column of y
+    """
+    cols = y_true.shape[1]
+    res = np.zeros(cols)
+    for c in range(0, cols):
+        res[c] = np.sqrt(mean_squared_error(y_true[:, c], y_pred[:, c]))
+
+    logger.info("RMSE")
 
 
 def get_test_ids():

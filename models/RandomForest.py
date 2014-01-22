@@ -1,6 +1,6 @@
 from sklearn import ensemble
 import classes
-from models.Base import BaseModel
+from models.Base import BaseModel, CascadeModel
 
 
 class GridSample75Mixin(object):
@@ -19,6 +19,19 @@ class RandomForestModel(GridSample75Mixin, BaseModel):
         'verbose': 3,
         'oob_score': True,
     }
+    estimator_class = ensemble.RandomForestRegressor
+
+
+class RandomForestCascadeModel(GridSample75Mixin, CascadeModel):
+    train_predictors_file = 'data/data_random_forest_train_001.npy'
+    test_predictors_file = 'data/data_random_forest_test_001.npy'
+    n_features = 75
+    estimator_defaults = {
+        'n_estimators': 5,
+        'random_state': 0,
+        'verbose': 3,
+        'oob_score': True,
+        }
     estimator_class = ensemble.RandomForestRegressor
 
 
