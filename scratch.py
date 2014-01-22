@@ -218,8 +218,9 @@ Out[11]: -0.13285532108270079
 import classes
 import models
 classes.logstream.setLevel(classes.logging.DEBUG)
-a = models.RandomForest.RandomForestCascadeModel()
+a = models.RandomForest.RandomForestCascadeModel(cv_sample=0.1)
+a.run('cv')
 a.run('train')
-b = models.RandomForest.RandomForestModel()
+b = models.RandomForest.RandomForestModel(cv_sample=0.1)
 b.estimator.set_params(n_estimators=10)
 b.run('train')

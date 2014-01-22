@@ -1,5 +1,5 @@
 import time
-from sklearn import grid_search, cross_validation
+from sklearn import grid_search, cross_validation, clone
 from classes import train_solutions, RawImage, logger, rmse_scorer, rmse
 from constants import *
 import numpy as np
@@ -362,13 +362,104 @@ class CascadeModel(BaseModel):
     """
     A variant of the BaseModel that trains each class in sequence, then uses the predictions from prior classes as inputs
     into the models for later classes.
-
-    This is experimental
     """
     def __init__(self, *args, **kwargs):
         super(CascadeModel, self).__init__(*args, **kwargs)
         # Storage for each estimator.  key is the class number, and the value is the estimator object
         self.estimator = dict((cls, self.get_estimator()) for cls in train_solutions.class_map.keys())
+
+    def perform_cross_validation(self, *args, **kwargs):
+        start_time = time.time()
+        if self.cv_sample is not None:
+            logger.info("Performing {}-fold cross validation with {:.0%} of the sample".format(self.cv_folds, self.cv_sample))
+            self.cv_x,\
+            self.cv_x_test,\
+            self.cv_y,\
+            self.cv_y_test = cross_validation.train_test_split(self.train_x, self.train_y, train_size=self.cv_sample)
+        else:
+            logger.info("Performing {}-fold cross validation with full training set".format(self.cv_folds))
+            self.cv_x = self.train_x
+            self.cv_y = self.train_y
+
+        self.cv_iterator = self.cv_class(self.cv_x.shape[0], n_folds=self.cv_folds)
+
+        params = {
+            'cv': self.cv_iterator,
+            'scoring': rmse_scorer,
+            'verbose': 2,
+            'n_jobs': self.n_jobs
+        }
+        params.update(kwargs)
+
+        # Gotta roll our own cross validation
+        # Cross validation will look like this:
+        # For each fold:
+        #   train estimator
+        #   Predict estimator
+        #   Store prediction
+        #   Move onto next estimator
+
+        overall_scores = []
+        for i, idx in enumerate(self.cv_iterator):
+            logger.debug("Working on fold {}".format(i + 1))
+            train = idx[0]
+            test = idx[1]
+
+            # Get the data
+            # The actual cross val method uses safe_mask to index the arrays.  This is only required if
+            # we might be handling sparse matrices
+            this_train_x = self.cv_x[train]
+            this_train_y = self.cv_y[train]
+            this_test_x = self.cv_x[test]
+            this_test_y = self.cv_y[test]
+
+            logger.debug("Fold {} training X and Y shape: {}, {}".format(i + 1, this_train_x.shape, this_train_y.shape))
+            logger.debug("Fold {} test X and Y shape: {}, {}".format(i + 1, this_test_x.shape, this_test_y.shape))
+
+            test_preds = np.zeros(this_test_y.shape)
+            train_preds = np.zeros(this_train_y.shape)
+
+            # Should be able to refactor out this inner loop
+            for cls in range(1, 12):
+                cols = train_solutions.class_map[cls]
+
+                logger.info("Performing CV on class {}".format(cls))
+
+                # Clone the estimator
+                # Need to do this for each fold
+                estimator = clone(self.estimator[cls])
+
+                existing_test_preds = np.any(test_preds, axis=0)
+                existing_train_preds = np.any(train_preds, axis=0)
+                this_x = np.hstack((this_train_x, train_preds[:, existing_train_preds]))
+                test_x = np.hstack((this_test_x, test_preds[:, existing_test_preds]))
+                this_y = this_train_y[:, cols]
+                test_y = this_test_y[:, cols]
+
+                logger.debug("Train X shape: {}".format(this_x.shape))
+                logger.debug("Train Y shape: {}".format(this_y.shape))
+                logger.debug("Test X shape: {}".format(test_x.shape))
+
+                # Parallelize at the estimator level
+                if 'n_jobs' in estimator.get_params().keys():
+                    estimator.set_params(n_jobs=self.n_jobs)
+                estimator.fit(this_x, this_y)
+
+                train_pred = estimator.predict(this_x)
+                test_pred = estimator.predict(test_x)
+                score = rmse(test_y, test_pred)
+                logger.info("RMSE on test set for class {}".format(score))
+
+                train_preds[:, cols] = train_pred
+                test_preds[:, cols] = test_pred
+
+            fold_rmse = rmse(this_test_y, test_preds)
+            overall_scores.append(fold_rmse)
+            logger.info("Overall score for fold {}: {}".format(i + 1, fold_rmse))
+
+        self.cv_scores = np.array(overall_scores)
+        logger.info("Cross validation completed in {}.  Scores:".format(time.time() - start_time))
+        logger.info("{}".format(self.cv_scores))
 
     def train(self, *args, **kwargs):
         start_time = time.time()
