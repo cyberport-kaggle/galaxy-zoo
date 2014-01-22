@@ -362,6 +362,10 @@ class CascadeModel(BaseModel):
     """
     A variant of the BaseModel that trains each class in sequence, then uses the predictions from prior classes as inputs
     into the models for later classes.
+
+    Some additional things that need to be done to make this model better:
+        - Follow the structure of the tree instead of just going from classes 1 to 11
+        - Scale the reponses so that each class sums to 100
     """
     def __init__(self, *args, **kwargs):
         super(CascadeModel, self).__init__(*args, **kwargs)
