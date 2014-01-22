@@ -404,6 +404,7 @@ class CascadeModel(BaseModel):
         #   Move onto next estimator
 
         overall_scores = []
+        detailed_scores = [{}] * self.cv_folds
         for i, idx in enumerate(self.cv_iterator):
             logger.debug("Working on fold {}".format(i + 1))
             train = idx[0]
@@ -452,7 +453,8 @@ class CascadeModel(BaseModel):
                 train_pred = estimator.predict(this_x)
                 test_pred = estimator.predict(test_x)
                 score = rmse(test_y, test_pred)
-                logger.info("RMSE on test set for class {}".format(score))
+                detailed_scores[i][cls] = score
+                logger.info("RMSE on test set for class {}: {}".format(cls, score))
 
                 train_preds[:, cols] = train_pred
                 test_preds[:, cols] = test_pred
@@ -463,7 +465,7 @@ class CascadeModel(BaseModel):
 
         self.cv_scores = np.array(overall_scores)
         logger.info("Cross validation completed in {}.  Scores:".format(time.time() - start_time))
-        logger.info("{}".format(self.cv_scores))
+        logger.info("{}".format(detailed_scores))
 
     def train(self, *args, **kwargs):
         start_time = time.time()

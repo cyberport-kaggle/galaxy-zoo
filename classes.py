@@ -105,6 +105,9 @@ class TrainSolutions(object):
         """
         cols = self.get_columns_for_class(cls)
         colsums = np.sum(cols, 1, keepdims=True)
+        # We can get some NaNs if some rows sum to 0
+        # If it's 0, instead divide by 1
+        colsums[colsums == 0] = 1
         return np.true_divide(cols, colsums)
 
 
