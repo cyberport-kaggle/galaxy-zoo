@@ -2,10 +2,12 @@ __all__ = [
     'Benchmarks',
     'RandomForest',
     'Base',
-    'Ridge'
+    'Ridge',
+    'SVR'
 ]
 
 import Benchmarks
 import RandomForest
 import Base
 import Ridge
+import SVR

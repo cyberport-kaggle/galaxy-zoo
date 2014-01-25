@@ -6,12 +6,14 @@ from __future__ import division
 from functools import wraps
 import os
 import logging
+from IPython import embed
 
 from scipy import misc
 import numpy as np
 from matplotlib import pyplot
 from sklearn.metrics import mean_squared_error, make_scorer
 from skimage.transform import rescale
+from sklearn.cluster import MiniBatchKMeans
 
 from constants import *
 
@@ -155,8 +157,8 @@ def classwise_rmse(y_true, y_pred):
     logger.info("Class-wise RMSEs:")
     for cls in range(1, 12):
         cols = train_solutions.class_map[cls]
-        res[cls-1] = np.sqrt(mean_squared_error(y_true[:, cols], y_pred[:, cols]))
-        logger.info("Class {}: {:5f}".format(cls, res[cls-1]))
+        res[cls - 1] = np.sqrt(mean_squared_error(y_true[:, cols], y_pred[:, cols]))
+        logger.info("Class {}: {:5f}".format(cls, res[cls - 1]))
     return res
 
 
@@ -174,6 +176,7 @@ def cache_to_file(filename, fmt='%.18e'):
     If the file exists, then the method will instead read from the file.
     Any function that is wrapped by this shouldn't have side effects (e.g. set properties on the instance)
     """
+
     def cache_decorator(func):
         @wraps(func)
         def cached_func(*args, **kwargs):
@@ -185,12 +188,42 @@ def cache_to_file(filename, fmt='%.18e'):
                 logger.info("Caching results of {} to {}".format(func.__name__, filename))
                 np.savetxt(filename, res, delimiter=',', fmt=fmt)
             return res
+
         return cached_func
+
     return cache_decorator
 
 
-class Submission(object):
+def get_training_data():
+    solution = np.loadtxt(TRAIN_SOLUTIONS_FILE, delimiter=',', skiprows=1)
+    return solution
 
+
+def crop_to_memmap(crop_size=150, training=True):
+    """
+    Crop all training and testing images into two memmap array
+    Train - the images will be in the same order as the train solutions files
+    @return:
+    """
+
+    if training:
+        path = TRAIN_IMAGE_PATH
+        files = get_training_data()[:, 0]
+        out = np.memmap('data/train_cropped_150.memmap', shape=(len(files), crop_size, crop_size, 3), mode='w+')
+    else:
+        path = TEST_IMAGE_PATH
+        files = get_test_ids()
+        out = np.memmap('data/test_cropped_150.memmap', shape=(len(files), crop_size, crop_size, 3), mode='w+')
+
+    for i, f in enumerate(files):
+        if i % 100 == 0:
+            print i
+        img = RawImage(path + '/' + str(int(f)) + '.jpg')
+        img.crop(150)
+        out[i] = img.data
+
+
+class Submission(object):
     """
     Utility function that takes care of some common tasks relating to submissiosn files
     """
@@ -227,13 +260,15 @@ class Submission(object):
         predictions = np.concatenate((self.row_names, self.data), axis=1)
         outpath = os.path.join(SUBMISSION_PATH, filename)
         logger.info("Saving solutions to file {}".format(outpath))
-        np.savetxt(outpath, predictions, delimiter=',', header=SUBMISSION_HEADER, fmt=self.submission_format, comments="")
+        np.savetxt(outpath, predictions, delimiter=',', header=SUBMISSION_HEADER, fmt=self.submission_format,
+                   comments="")
 
     def check_count(self):
         """
         Check that the number of rows is correct
         """
         pass
+
     def check_probabilities(self):
         """
         Ensure that probabilities for subsequent questions in the tree add up to their parent's probability
@@ -243,7 +278,6 @@ class Submission(object):
 
 
 class RawImage(object):
-
     """
     Used to load raw image files
     """
@@ -277,7 +311,9 @@ class RawImage(object):
 
     def grayscale(self):
         # Faster than the skimage.color.rgb2gray
-        self.data = ((0.2125 * self.data[:, :, 0]) + (0.7154 * self.data[:, :, 1]) + (0.0721 * self.data[:, :, 2])) / 255
+        self.data = (
+                        (0.2125 * self.data[:, :, 0]) + (0.7154 * self.data[:, :, 1]) + (
+                            0.0721 * self.data[:, :, 2])) / 255
         return self
 
     def flatten(self):
@@ -319,6 +355,125 @@ class RawImage(object):
         """
         central_coord = self.central_pixel_coordinates
         return self.data[central_coord[0], central_coord[1]]
+
     @property
     def average_intensity(self):
         return self.data.mean()
+
+
+class KMeansFeatures():
+    """
+    Implements Kmeans feature learning as per Adam Coates' MATLAB code
+    """
+
+    def __init__(self, rf_size=6, num_centroids=1600, whitening=True, num_patches=400000):
+        self.rf_size = rf_size
+        self.num_centroids = num_centroids
+        self.whitening = whitening
+        self.num_patches = num_patches
+        self.patches = np.zeros((num_patches, rf_size * rf_size * 3))
+        self.dim = np.array([150, 150, 3])
+        self.id = get_training_data()[:, 0]
+        self.n = self.id.shape[0]
+        self.centroids = None
+        self.trainX = np.memmap('data/train_cropped_150.memmap', mode='r', shape=(N_TRAIN, 150, 150, 3))
+        self.testX = np.memmap('data/test_cropped_150.memmap', mode='r', shape=(N_TEST, 150, 150, 3))
+
+    def extract_patches(self):
+        for i in range(self.num_patches):
+            if i + 1 % 10000 == 0:
+                print 'Extract patch {0} / {1}'.format(i + 1, self.num_patches)
+
+            row = np.random.random_integers(self.dim[0] - self.rf_size)
+            col = np.random.random_integers(self.dim[1] - self.rf_size)
+
+            # img = RawImage(TRAIN_IMAGE_PATH + '/' + str(int(self.id[i % self.n])) + '.jpg')
+            # img.crop(150)
+
+            img = self.trainX[i % self.n]
+            patch = img[row:row + self.rf_size, col:col + self.rf_size, :]
+            self.patches[i, :] = patch.flatten()
+
+    def normalize(self):
+        temp1 = self.patches - self.patches.mean(1, keepdims=True)
+        temp2 = np.sqrt(self.patches.var(1, keepdims=True) + 10)
+
+        self.patches = temp1 / temp2
+
+    def whiten(self):
+        cov = np.cov(self.patches, rowvar=0)
+        self.mean = self.patches.mean(0, keepdims=True)
+        d, v = np.linalg.eig(cov)
+        self.p = np.dot(v,
+                        np.dot(np.diag(np.sqrt(1 / (d + 0.1))),
+                               v.T))
+        self.patches = np.dot(self.patches - self.mean, self.p)
+
+    def cluster(self):
+        kmeans = MiniBatchKMeans(n_clusters=self.num_centroids)
+        kmeans.fit(self.patches)
+        self.centroids = kmeans.cluster_centers_
+
+    def fit(self):
+        self.extract_patches()
+        self.normalize()
+        self.whiten()
+        self.cluster()
+
+        # clean up
+        self.patches = None
+
+    def extract_features(self, x):
+        patches = np.hstack((self.im2col(x[:, :, 0]),
+                             self.im2col(x[:, :, 1]),
+                             self.im2col(x[:, :, 2]))).T
+
+        # normalize for contrast
+        temp1 = patches - patches.mean(1, keepdims=True)
+        temp2 = np.sqrt(patches.var(1, keepdims=True) + 10)
+        patches = temp1 / temp2
+
+        if self.whitening:
+            patches = np.dot(patches - self.mean, self.p)
+
+        xx = np.sum(patches ** 2, 1, keepdims=True)
+        cc = np.sum(self.centroids ** 2, 1, keepdims=True).T
+        xc = np.dot(patches, self.centroids.T)
+
+        z = np.sqrt(cc + (xx - 2 * xc))
+        mu = z.mean(1, keepdims=True)
+        patches = np.maximum(mu - z, 0)
+
+        prows = self.dim[0] - self.rf_size + 1
+        pcols = self.dim[1] - self.rf_size + 1
+        patches = patches.reshape((prows, pcols, self.num_centroids))
+
+        halfr = np.rint(prows / 2)
+        halfc = np.rint(pcols / 2)
+        q1 = np.sum(np.sum(patches[0:halfr, 0:halfc, :], 0), 1)
+        q2 = np.sum(np.sum(patches[halfr:, 0:halfc, :], 0), 1)
+        q3 = np.sum(np.sum(patches[0:halfr, halfc:, :], 0), 1)
+        q4 = np.sum(np.sum(patches[halfr:, halfc:, :], 0), 1)
+
+        return np.hstack((q1.flatten(), q2.flatten(), q3.flatten(), q4.flatten()))
+
+    def im2col(self, img, rf_size):
+        row, col = img.shape
+        patches = np.zeros((rf_size * rf_size,
+                            (row - rf_size + 1) * (col - rf_size + 1)))
+
+        counter = 0
+        for i in range(row - 1):
+            for j in range(col - 1):
+                patches[:, counter] = img[i:i + rf_size, j:j + rf_size]
+                counter += 1
+
+        return patches
+
+    def transform(self):
+        res = np.zeros((self.trainX.shape[0], self.num_centroids * 4))
+
+        for i, row in enumerate(self.trainX):
+            res[i] = self.extract_features(row)
+
+        return res

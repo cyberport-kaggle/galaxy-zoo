@@ -10,8 +10,10 @@ from constants import *
 from sklearn.decomposition import RandomizedPCA
 from sklearn.pipeline import Pipeline
 from sklearn.grid_search import GridSearchCV
+from sklearn.ensemble import RandomForestRegressor
 import models
-
+from sklearn.cross_validation import KFold
+from IPython import embed
 
 logger = logging.getLogger('galaxy')
 
@@ -114,3 +116,44 @@ def ridge_rf_001(outfile='sub_ridge_rf_001.csv'):
     mdl.run('predict')
     sub = classes.Submission(mdl.test_y)
     sub.to_file(outfile)
+
+
+def svr_rf():
+    # subsample
+    train_y = classes.get_training_data()
+
+    # randomly sample 10% Y and select the gid's
+    n = 7000
+    crop_size = 150
+    scale = 0.1
+    train_y = train_y[np.random.randint(train_y.shape[0], size=n), :]
+    train_x = np.zeros((n, (crop_size * scale) ** 2 * 3))
+
+    # load the training images and crop at the same time
+    for row, gid in enumerate(train_y[:, 0]):
+        img = classes.RawImage(TRAIN_IMAGE_PATH + '/' + str(int(gid)) + '.jpg')
+        img.crop(crop_size)
+        img.rescale(scale)
+        img.flatten()
+        train_x[row] = img.data
+        if (row % 10) == 0:
+            print row
+
+
+    parameters = {'alpha': [14], 'n_estimators': [10]}
+    kf = KFold(train_x.shape[0], n_folds=2, shuffle=True)
+
+    for train, test in kf:
+        ridge_rf = models.SVR.SVRRFModel()
+        ridge_rf.fit(train_x[train, :], train_y[train, 1:])
+        res = ridge_rf.predict(train_x[test, :])
+        classes.rmse(train_y[test, 1:], res)
+
+    # transform images
+
+    # cv and training
+
+km = classes.KMeansFeatures(num_centroids=200, num_patches=20000)
+km.fit()
+
+embed()
