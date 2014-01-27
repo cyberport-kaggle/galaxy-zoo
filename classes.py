@@ -198,11 +198,6 @@ def cache_to_file(filename, fmt='%.18e'):
     return cache_decorator
 
 
-def get_training_data():
-    solution = np.loadtxt(TRAIN_SOLUTIONS_FILE, delimiter=',', skiprows=1)
-    return solution
-
-
 def crop_to_memmap(crop_size=150, training=True):
     """
     Crop all training and testing images into two memmap array
@@ -212,7 +207,7 @@ def crop_to_memmap(crop_size=150, training=True):
 
     if training:
         path = TRAIN_IMAGE_PATH
-        files = get_training_data()[:, 0]
+        files = train_solutions.iids
         out = np.memmap('data/train_cropped_150.memmap', shape=(len(files), crop_size, crop_size, 3), mode='w+')
     else:
         path = TEST_IMAGE_PATH
@@ -412,7 +407,11 @@ class KMeansFeatures(object):
 
         # these appear to be hard coded and are basically constant -- probably don't need to store these on the object
         self.dim = np.array([150, 150, 3])
-        self.id = get_training_data()[:, 0]
+        # These actually do not need to be stored here -- the TrainSolutions class encapsulates these information
+        # And it is instantiated with classes, so it is always available
+        # id is an ndarray of training image ids
+        self.id = train_solutions.iids
+        # n is then the number of training images
         self.n = self.id.shape[0]
 
         # Fields for the results
