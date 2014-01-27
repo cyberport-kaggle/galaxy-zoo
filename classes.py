@@ -18,6 +18,7 @@ from mpl_toolkits.axes_grid1 import ImageGrid
 from sklearn.feature_extraction.image import extract_patches_2d
 from numpy.lib.stride_tricks import as_strided
 
+from joblib import delayed, Parallel
 from constants import *
 
 logging.basicConfig(level=logging.INFO)
@@ -360,6 +361,24 @@ class RawImage(object):
         return self.data.mean()
 
 
+def extract_patch(patch_num, train_mmap, patch_size):
+    if (patch_num + 1) % 1000 == 0:
+        logger.info('Extract patch {0}'.format(patch_num + 1))
+
+    # train_mmap is of dimensions (n_training, image_rows, image_cols, channels)
+    image_rows = train_mmap.shape[1]
+    image_cols = train_mmap.shape[2]
+
+    # Randomly get an offset
+    row = np.random.random_integers(image_rows - patch_size)
+    col = np.random.random_integers(image_cols - patch_size)
+
+    # Pick the right image and extract the patch
+    img = train_mmap[patch_num % image_rows]
+    patch = img[row:row + patch_size, col:col + patch_size, :]
+    return patch.flatten()
+
+
 class KMeansFeatures(object):
     """
     Implements Kmeans feature learning as per Adam Coates' MATLAB code
@@ -422,20 +441,15 @@ class KMeansFeatures(object):
         self.testX = np.memmap('data/test_cropped_150.memmap', mode='r', shape=(N_TEST, 150, 150, 3))
 
     def extract_patches(self):
-        # Extract patches from the training data
-        for i in range(self.num_patches):
-            if (i + 1) % 1000 == 0:
-                print 'Extract patch {0} / {1}'.format(i + 1, self.num_patches)
-
-            row = np.random.random_integers(self.dim[0] - self.rf_size)
-            col = np.random.random_integers(self.dim[1] - self.rf_size)
-
-            # img = RawImage(TRAIN_IMAGE_PATH + '/' + str(int(self.id[i % self.n])) + '.jpg')
-            # img.crop(150)
-
-            img = self.trainX[i % self.n]
-            patch = img[row:row + self.rf_size, col:col + self.rf_size, :]
-            self.patches[i, :] = patch.flatten()
+        """
+        Extracts patches from the training data
+        Does this by looping through the images, taking one patch from each image, until we get the number
+        of patches we want
+        """
+        patch_rng = xrange(self.num_patches)
+        res = Parallel(n_jobs=-1, verbose=3)(delayed(extract_patch)(x, self.trainX, 6) for x in patch_rng)
+        import ipdb; ipdb.set_trace()
+        self.patches = np.vstack(res)
 
     def normalize(self):
         temp1 = self.patches - self.patches.mean(1, keepdims=True)
