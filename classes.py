@@ -75,6 +75,7 @@ class TrainSolutions(object):
     def __init__(self):
         solution = np.loadtxt(TRAIN_SOLUTIONS_FILE, delimiter=',', skiprows=1)
         self.data = solution[:, 1:]
+        self.iids = solution[:, 0]
         self.filenames = map(lambda x: str(int(x)) + '.jpg', list(solution[:, 0]))
 
     @property
@@ -367,6 +368,39 @@ class RawImage(object):
 class KMeansFeatures(object):
     """
     Implements Kmeans feature learning as per Adam Coates' MATLAB code
+
+    Before using this, be sure ot run classes.crop_images_to_mmap to generate the training and test data
+
+    fit() is the primary entry point for training the data
+    transform() is the
+
+    Parameters:
+    ==========
+    rf_size: int
+        The size of the receptive fields (patches)
+
+    num_centroids: int
+
+    whitening: bool
+        Perform ZCA whitening?
+
+    num_patches: int
+        The numbe rof patches to sample
+
+    Properties:
+    ===========
+    patches: ndarray of shape (num_patchs, rf_size^2 * 3)
+        ndarray of the patches.  If patches are 2x2 with three color channels, then stores a single patch as an array of
+        dimension (1, 12) -- i.e. it is flattened
+
+    trainX: memory mapped ndarray
+        training data
+
+    testX: memory mapped ndarray
+        test data
+
+    centroids: ???
+
     """
 
     def __init__(self, rf_size=6, num_centroids=1600, whitening=True, num_patches=400000):
@@ -375,14 +409,21 @@ class KMeansFeatures(object):
         self.whitening = whitening
         self.num_patches = num_patches
         self.patches = np.zeros((num_patches, rf_size * rf_size * 3))
+
+        # these appear to be hard coded and are basically constant -- probably don't need to store these on the object
         self.dim = np.array([150, 150, 3])
         self.id = get_training_data()[:, 0]
         self.n = self.id.shape[0]
+
+        # Fields for the results
         self.centroids = None
+
+        # Training data
         self.trainX = np.memmap('data/train_cropped_150.memmap', mode='r', shape=(N_TRAIN, 150, 150, 3))
         self.testX = np.memmap('data/test_cropped_150.memmap', mode='r', shape=(N_TEST, 150, 150, 3))
 
     def extract_patches(self):
+        # Extract patches from the training data
         for i in range(self.num_patches):
             if (i + 1) % 1000 == 0:
                 print 'Extract patch {0} / {1}'.format(i + 1, self.num_patches)
