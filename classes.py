@@ -448,7 +448,6 @@ class KMeansFeatures(object):
         """
         patch_rng = xrange(self.num_patches)
         res = Parallel(n_jobs=-1, verbose=3)(delayed(extract_patch)(x, self.trainX, 6) for x in patch_rng)
-        import ipdb; ipdb.set_trace()
         self.patches = np.vstack(res)
 
     def normalize(self):
