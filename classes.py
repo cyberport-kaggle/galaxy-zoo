@@ -14,10 +14,13 @@ from matplotlib import pyplot
 from sklearn.metrics import mean_squared_error, make_scorer
 from skimage.transform import rescale
 from sklearn.cluster import MiniBatchKMeans
+from mpl_toolkits.axes_grid1 import ImageGrid
+from sklearn.feature_extraction.image import extract_patches_2d
+from numpy.lib.stride_tricks import as_strided
 
 from constants import *
 
-
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('galaxy')
 logger.setLevel(logging.DEBUG)
 log_formatter = logging.Formatter('%(asctime)s - %(module)s - %(levelname)s - %(message)s',
@@ -361,7 +364,7 @@ class RawImage(object):
         return self.data.mean()
 
 
-class KMeansFeatures():
+class KMeansFeatures(object):
     """
     Implements Kmeans feature learning as per Adam Coates' MATLAB code
     """
@@ -381,7 +384,7 @@ class KMeansFeatures():
 
     def extract_patches(self):
         for i in range(self.num_patches):
-            if i + 1 % 10000 == 0:
+            if (i + 1) % 1000 == 0:
                 print 'Extract patch {0} / {1}'.format(i + 1, self.num_patches)
 
             row = np.random.random_integers(self.dim[0] - self.rf_size)
@@ -410,7 +413,7 @@ class KMeansFeatures():
         self.patches = np.dot(self.patches - self.mean, self.p)
 
     def cluster(self):
-        kmeans = MiniBatchKMeans(n_clusters=self.num_centroids)
+        kmeans = MiniBatchKMeans(n_clusters=self.num_centroids, verbose=True, batch_size=1000)
         kmeans.fit(self.patches)
         self.centroids = kmeans.cluster_centers_
 
@@ -421,12 +424,16 @@ class KMeansFeatures():
         self.cluster()
 
         # clean up
-        self.patches = None
+        # self.patches = None
 
     def extract_features(self, x):
-        patches = np.hstack((self.im2col(x[:, :, 0]),
-                             self.im2col(x[:, :, 1]),
-                             self.im2col(x[:, :, 2]))).T
+        # patches = np.vstack((self.im2col(x[:, :, 0]),
+        #                      self.im2col(x[:, :, 1]),
+        #                      self.im2col(x[:, :, 2]))).T
+
+        patches = np.vstack((self.rolling_block(x[:, :, 0]),
+                             self.rolling_block(x[:, :, 1]),
+                             self.rolling_block(x[:, :, 2]))).T
 
         # normalize for contrast
         temp1 = patches - patches.mean(1, keepdims=True)
@@ -448,32 +455,62 @@ class KMeansFeatures():
         pcols = self.dim[1] - self.rf_size + 1
         patches = patches.reshape((prows, pcols, self.num_centroids))
 
-        halfr = np.rint(prows / 2)
-        halfc = np.rint(pcols / 2)
-        q1 = np.sum(np.sum(patches[0:halfr, 0:halfc, :], 0), 1)
-        q2 = np.sum(np.sum(patches[halfr:, 0:halfc, :], 0), 1)
-        q3 = np.sum(np.sum(patches[0:halfr, halfc:, :], 0), 1)
-        q4 = np.sum(np.sum(patches[halfr:, halfc:, :], 0), 1)
+        halfr = int(np.rint(prows / 2))
+        halfc = int(np.rint(pcols / 2))
+        q1 = np.sum(patches[0:halfr, 0:halfc, :], (0, 1))
+        q2 = np.sum(patches[halfr:, 0:halfc, :], (0, 1))
+        q3 = np.sum(patches[0:halfr, halfc:, :], (0, 1))
+        q4 = np.sum(patches[halfr:, halfc:, :], (0, 1))
 
         return np.hstack((q1.flatten(), q2.flatten(), q3.flatten(), q4.flatten()))
 
-    def im2col(self, img, rf_size):
+    def im2col(self, img):
         row, col = img.shape
-        patches = np.zeros((rf_size * rf_size,
-                            (row - rf_size + 1) * (col - rf_size + 1)))
+        patches = np.zeros((self.rf_size * self.rf_size,
+                            (row - self.rf_size + 1) * (col - self.rf_size + 1)))
 
         counter = 0
-        for i in range(row - 1):
-            for j in range(col - 1):
-                patches[:, counter] = img[i:i + rf_size, j:j + rf_size]
+        for i in range(row - self.rf_size + 1):
+            for j in range(col - self.rf_size + 1):
+                temp = img[i:i + self.rf_size, j:j + self.rf_size]
+                patches[:, counter] = temp.flatten()
                 counter += 1
 
         return patches
 
-    def transform(self):
-        res = np.zeros((self.trainX.shape[0], self.num_centroids * 4))
+    def rolling_block(self, A):
+        block = (self.rf_size, self.rf_size)
+        shape = (A.shape[0] - block[0] + 1, A.shape[1] - block[1] + 1) + block
+        strides = (A.strides[0], A.strides[1]) + A.strides
+        res = np.copy(as_strided(A, shape=shape, strides=strides))
+        res = res.reshape(shape[0] * shape[1], shape[2] * shape[3]).T
+        return res
 
-        for i, row in enumerate(self.trainX):
+    def transform(self, n):
+        if n > self.trainX.shape[0]:
+            n = self.trainX.shape[0]
+
+        res = np.zeros((n, self.num_centroids * 4))
+
+        for i, row in enumerate(self.trainX[0:n]):
+            if (i + 1) % 10 == 0:
+                logging.info('Extracting features from image {0} / {1}'.format(i + 1, n))
+
             res[i] = self.extract_features(row)
 
         return res
+
+    def show_centroids(self):
+        im = np.arange(100)
+        im.shape = 10, 10
+
+        fig = pyplot.figure(1, (4., 4.))
+        grid = ImageGrid(fig, 111,  # similar to subplot(111)
+                         nrows_ncols=(10, 10),  # creates 10x10 grid of axes
+                         axes_pad=0.1,  # pad between axes in inch.
+        )
+
+        for grid_pos, i in enumerate(np.random.choice(self.centroids.shape[0], 100, replace=False)):
+            grid[grid_pos].imshow(self.centroids[i].reshape(self.rf_size, self.rf_size, 3))  # The AxesGrid object work as a list of axes.
+
+        pyplot.show()

@@ -118,6 +118,17 @@ def ridge_rf_001(outfile='sub_ridge_rf_001.csv'):
     sub.to_file(outfile)
 
 
+def unique_rows(data):
+    """
+    Returns the number of unique rows in a 2D NumPy array.
+    Using it to check the number of duplicated clusters in K-Means learning
+    @param data:
+    @return:
+    """
+    data_set = set([tuple(row) for row in data])
+    return len(data_set)
+
+
 def svr_rf():
     # subsample
     train_y = classes.get_training_data()
@@ -153,7 +164,21 @@ def svr_rf():
 
     # cv and training
 
-km = classes.KMeansFeatures(num_centroids=200, num_patches=20000)
-km.fit()
 
-embed()
+def kmeans_ridge_rf():
+    km = classes.KMeansFeatures(rf_size=6, num_centroids=100, num_patches=400000)
+    km.fit()
+    n = 7000
+
+    train_x = km.transform(n)
+    train_y = classes.get_training_data()[0:n, 1:]
+
+    kf = KFold(n, n_folds=2, shuffle=True)
+
+    for train, test in kf:
+        clf = models.Ridge.RidgeRFEstimator()
+        clf.fit(train_x[train], train_y[train])
+        res = clf.predict(train_x[test])
+        classes.rmse(train_y[test], res)
+
+kmeans_ridge_rf()
