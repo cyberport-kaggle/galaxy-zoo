@@ -131,7 +131,7 @@ def unique_rows(data):
 
 def svr_rf():
     # subsample
-    train_y = classes.get_training_data()
+    train_y = classes.train_solutions.data
 
     # randomly sample 10% Y and select the gid's
     n = 7000
@@ -166,9 +166,9 @@ def svr_rf():
 
 
 def kmeans_ridge_rf():
-    km = classes.KMeansFeatures(rf_size=6, num_centroids=100, num_patches=400000, cores=2)
+    km = models.KMeansFeatures.KMeansFeatures(rf_size=6, num_centroids=100, num_patches=400000)
     km.fit()
-    n = 70000
+    n = 7000
 
     train_x = km.transform(n)
     train_y = classes.get_training_data()[0:n, 1:]
