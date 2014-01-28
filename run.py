@@ -166,9 +166,9 @@ def svr_rf():
 
 
 def kmeans_ridge_rf():
-    km = classes.KMeansFeatures(rf_size=6, num_centroids=100, num_patches=400000)
+    km = classes.KMeansFeatures(rf_size=6, num_centroids=100, num_patches=400000, cores=2)
     km.fit()
-    n = 7000
+    n = 70000
 
     train_x = km.transform(n)
     train_y = classes.get_training_data()[0:n, 1:]

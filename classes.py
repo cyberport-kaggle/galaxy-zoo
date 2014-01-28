@@ -15,8 +15,9 @@ from sklearn.metrics import mean_squared_error, make_scorer
 from skimage.transform import rescale
 from sklearn.cluster import MiniBatchKMeans
 from mpl_toolkits.axes_grid1 import ImageGrid
-from sklearn.feature_extraction.image import extract_patches_2d
 from numpy.lib.stride_tricks import as_strided
+from multiprocessing import Pool
+import itertools
 
 from constants import *
 
@@ -364,12 +365,16 @@ class RawImage(object):
         return self.data.mean()
 
 
+def unwrap_self_extract_features(arg, **kwarg):
+    return KMeansFeatures.extract_features(*arg, **kwarg)
+
+
 class KMeansFeatures(object):
     """
     Implements Kmeans feature learning as per Adam Coates' MATLAB code
     """
 
-    def __init__(self, rf_size=6, num_centroids=1600, whitening=True, num_patches=400000):
+    def __init__(self, rf_size=6, num_centroids=1600, whitening=True, num_patches=400000, cores=1):
         self.rf_size = rf_size
         self.num_centroids = num_centroids
         self.whitening = whitening
@@ -379,6 +384,7 @@ class KMeansFeatures(object):
         self.id = get_training_data()[:, 0]
         self.n = self.id.shape[0]
         self.centroids = None
+        self.cores = cores
         self.trainX = np.memmap('data/train_cropped_150.memmap', mode='r', shape=(N_TRAIN, 150, 150, 3))
         self.testX = np.memmap('data/test_cropped_150.memmap', mode='r', shape=(N_TEST, 150, 150, 3))
 
@@ -427,10 +433,6 @@ class KMeansFeatures(object):
         # self.patches = None
 
     def extract_features(self, x):
-        # patches = np.vstack((self.im2col(x[:, :, 0]),
-        #                      self.im2col(x[:, :, 1]),
-        #                      self.im2col(x[:, :, 2]))).T
-
         patches = np.vstack((self.rolling_block(x[:, :, 0]),
                              self.rolling_block(x[:, :, 1]),
                              self.rolling_block(x[:, :, 2]))).T
