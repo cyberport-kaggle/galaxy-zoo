@@ -1,3 +1,4 @@
+from __future__ import division
 import multiprocessing
 import itertools
 import math
@@ -100,18 +101,13 @@ class KMeansFeatures(object):
         self.whitening = whitening
         self.num_patches = num_patches
         self.patches = np.zeros((num_patches, rf_size * rf_size * 3))
-
         # these appear to be hard coded and are basically constant -- probably don't need to store these on the object
         self.dim = np.array([150, 150, 3])
-        # These actually do not need to be stored here -- the TrainSolutions class encapsulates these information
-        # And it is instantiated with classes, so it is always available
-        # id is an ndarray of training image ids
-        self.id = classes.train_solutions.iids
-        # n is then the number of training images
-        self.n = self.id.shape[0]
 
-        # Fields for the results
-        self.centroids = None
+        # Fields for the results - populated after self.fit()
+        self.centroids = None  # shape (num_centroids, rf_size * rf_size * channels)
+        self.p = None  # shape (rf_size * rf_size * channels, rf_size * rf_size * channels)
+        self.mean = None  # column means (1, rf_size * rf_size * channels)
 
         # Training data
         self.trainX = np.memmap('data/train_cropped_150.memmap', mode='r', shape=(N_TRAIN, 150, 150, 3))
@@ -177,59 +173,22 @@ class KMeansFeatures(object):
         # clean up
         # self.patches = None
 
-    def extract_features(self, x):
-        patches = np.vstack((self.rolling_block(x[:, :, 0]),
-                             self.rolling_block(x[:, :, 1]),
-                             self.rolling_block(x[:, :, 2]))).T
-
-        # normalize for contrast
-        temp1 = patches - patches.mean(1, keepdims=True)
-        temp2 = np.sqrt(patches.var(1, keepdims=True) + 10)
-        patches = temp1 / temp2
-
-        if self.whitening:
-            patches = np.dot(patches - self.mean, self.p)
-
-        xx = np.sum(patches ** 2, 1, keepdims=True)
-        cc = np.sum(self.centroids ** 2, 1, keepdims=True).T
-        xc = np.dot(patches, self.centroids.T)
-
-        z = np.sqrt(cc + (xx - 2 * xc))
-        mu = z.mean(1, keepdims=True)
-        patches = np.maximum(mu - z, 0)
-
-        prows = self.dim[0] - self.rf_size + 1
-        pcols = self.dim[1] - self.rf_size + 1
-        patches = patches.reshape((prows, pcols, self.num_centroids))
-
-        halfr = int(np.rint(prows / 2))
-        halfc = int(np.rint(pcols / 2))
-        q1 = np.sum(patches[0:halfr, 0:halfc, :], (0, 1))
-        q2 = np.sum(patches[halfr:, 0:halfc, :], (0, 1))
-        q3 = np.sum(patches[0:halfr, halfc:, :], (0, 1))
-        q4 = np.sum(patches[halfr:, halfc:, :], (0, 1))
-
-        return np.hstack((q1.flatten(), q2.flatten(), q3.flatten(), q4.flatten()))
-
-    def rolling_block(self, A):
-        block = (self.rf_size, self.rf_size)
-        shape = (A.shape[0] - block[0] + 1, A.shape[1] - block[1] + 1) + block
-        strides = (A.strides[0], A.strides[1]) + A.strides
-        res = np.copy(as_strided(A, shape=shape, strides=strides))
-        res = res.reshape(shape[0] * shape[1], shape[2] * shape[3]).T
-        return res
-
     def transform(self, n):
         if n > self.trainX.shape[0]:
             n = self.trainX.shape[0]
 
         res = np.zeros((n, self.num_centroids * 4))
 
-        for i, row in enumerate(self.trainX[0:n]):
-            if (i + 1) % 10 == 0:
-                logger.info('Extracting features from image {0} / {1}'.format(i + 1, n))
+        cores = multiprocessing.cpu_count()
+        rng = range(n)
+        chunk_size = int(math.ceil(n / cores))
+        chunks = list(itertools.izip_longest(*[iter(rng)] * chunk_size))
+        logger.info("Transforming in {} jobs, chunk sizes: {}".format(cores, [len(x) for x in chunks]))
 
-            res[i] = self.extract_features(row)
+        res = Parallel(n_jobs=cores, verbose=3)(
+            delayed(chunked_extract_features)(i, self.trainX, self.rf_size, self.centroids, self.mean, self.p, self.whitening) for i in chunks
+        )
+        res = np.vstack(res)
 
         return res
 
@@ -247,3 +206,81 @@ class KMeansFeatures(object):
             grid[grid_pos].imshow(self.centroids[i].reshape(self.rf_size, self.rf_size, 3))  # The AxesGrid object work as a list of axes.
 
         pyplot.show()
+
+
+def chunked_extract_features(idx, trainX, rf_size, centroids, mean, p, whitening=True):
+    """
+    Receives a list of image indices to extract features from
+
+    Arguments:
+    ==========
+    i: list of ints
+        Indices of images to extract
+
+    trainX: memmapped ndarray
+
+    rf_size: int
+
+    centroids: ndarray
+
+    mean: ndarray
+
+    p: ndarray
+    """
+    idx = [x for x in idx if x is not None]
+    res = [None] * len(idx)
+    for i, img_idx in enumerate(idx):
+        if (i + 1) % 10 == 0:
+            logger.info("Extracting features on image {} / {}".format(i + 1, len(idx)))
+
+        x = trainX[img_idx]
+        patches = np.vstack((rolling_block(x[:, :, 0], rf_size),
+                             rolling_block(x[:, :, 1], rf_size),
+                             rolling_block(x[:, :, 2], rf_size))).T
+
+        # normalize for contrast
+        temp1 = patches - patches.mean(1, keepdims=True)
+        temp2 = np.sqrt(patches.var(1, keepdims=True) + 10)
+        patches = temp1 / temp2
+
+        if whitening:
+            patches = np.dot(patches - mean, p)
+
+        xx = np.sum(patches ** 2, 1, keepdims=True)
+        cc = np.sum(centroids ** 2, 1, keepdims=True).T
+        xc = np.dot(patches, centroids.T)
+
+        z = np.sqrt(cc + (xx - 2 * xc))
+        mu = z.mean(1, keepdims=True)
+        patches = np.maximum(mu - z, 0)
+
+        # 150 is hard coded in the crop size, which is actually pre-determined by classes.crop_image_to_mmap
+        # So don't need to reference the attribute here
+        prows = 150 - rf_size + 1
+        pcols = 150 - rf_size + 1
+        num_centroids = centroids.shape[0]
+        patches = patches.reshape((prows, pcols, num_centroids))
+
+        halfr = int(np.rint(prows / 2))
+        halfc = int(np.rint(pcols / 2))
+        q1 = np.sum(patches[0:halfr, 0:halfc, :], (0, 1))
+        q2 = np.sum(patches[halfr:, 0:halfc, :], (0, 1))
+        q3 = np.sum(patches[0:halfr, halfc:, :], (0, 1))
+        q4 = np.sum(patches[halfr:, halfc:, :], (0, 1))
+
+        res[i] = np.hstack((q1.flatten(), q2.flatten(), q3.flatten(), q4.flatten()))
+
+    return np.vstack(res)
+
+
+def rolling_block(A, block_size):
+    """
+    Gets a rolling window on A in a square with side length block_size
+    Uses the stride trick
+    """
+    block = (block_size, block_size)
+    shape = (A.shape[0] - block[0] + 1, A.shape[1] - block[1] + 1) + block
+    strides = (A.strides[0], A.strides[1]) + A.strides
+    res = np.copy(as_strided(A, shape=shape, strides=strides))
+    res = res.reshape(shape[0] * shape[1], shape[2] * shape[3]).T
+    return res
