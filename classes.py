@@ -4,9 +4,12 @@ Classes for Galaxy Zoo
 
 from __future__ import division
 from functools import wraps
+import multiprocessing
 import os
 import logging
 from IPython import embed
+import itertools
+import math
 
 from scipy import misc
 import numpy as np
@@ -15,13 +18,12 @@ from sklearn.metrics import mean_squared_error, make_scorer
 from skimage.transform import rescale
 from sklearn.cluster import MiniBatchKMeans
 from mpl_toolkits.axes_grid1 import ImageGrid
+from sklearn.feature_extraction.image import extract_patches_2d
 from numpy.lib.stride_tricks import as_strided
-from multiprocessing import Pool
-import itertools
 
+from joblib import delayed, Parallel
 from constants import *
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('galaxy')
 logger.setLevel(logging.DEBUG)
 log_formatter = logging.Formatter('%(asctime)s - %(module)s - %(levelname)s - %(message)s',
@@ -76,6 +78,7 @@ class TrainSolutions(object):
     def __init__(self):
         solution = np.loadtxt(TRAIN_SOLUTIONS_FILE, delimiter=',', skiprows=1)
         self.data = solution[:, 1:]
+        self.iids = solution[:, 0]
         self.filenames = map(lambda x: str(int(x)) + '.jpg', list(solution[:, 0]))
 
     @property
@@ -198,11 +201,6 @@ def cache_to_file(filename, fmt='%.18e'):
     return cache_decorator
 
 
-def get_training_data():
-    solution = np.loadtxt(TRAIN_SOLUTIONS_FILE, delimiter=',', skiprows=1)
-    return solution
-
-
 def crop_to_memmap(crop_size=150, training=True):
     """
     Crop all training and testing images into two memmap array
@@ -212,7 +210,7 @@ def crop_to_memmap(crop_size=150, training=True):
 
     if training:
         path = TRAIN_IMAGE_PATH
-        files = get_training_data()[:, 0]
+        files = train_solutions.iids
         out = np.memmap('data/train_cropped_150.memmap', shape=(len(files), crop_size, crop_size, 3), mode='w+')
     else:
         path = TEST_IMAGE_PATH
@@ -365,51 +363,143 @@ class RawImage(object):
         return self.data.mean()
 
 
-def unwrap_self_extract_features(arg, **kwarg):
-    return KMeansFeatures.extract_features(*arg, **kwarg)
+def chunked_extract_patch(patch_nums, train_mmap, patch_size):
+    """
+    Extracts patches from images in chuncks
+
+    Arguments:
+    =========
+    patch_nums: list of integers
+        The image numbers from which to extract patches
+
+    train_mmap: mem-mapped ndarray
+        The image training set.  Dimensions of (n_training, image_height, image_width, channels)
+
+    patch_size: int
+        size of the patch to extract
+
+
+    Returns:
+    ========
+    ndarray of shape (len(patch_nums), patch_size * patch_size * channels)
+
+    """
+    # Filter out any Nones that might have been passed in
+    patch_nums = [x for x in patch_nums if x is not None]
+    res = [None] * len(patch_nums)
+
+    for i, p in enumerate(patch_nums):
+        # train_mmap is of dimensions (n_training, image_rows, image_cols, channels)
+        image_rows = train_mmap.shape[1]
+        image_cols = train_mmap.shape[2]
+
+        # Randomly get an offset
+        row = np.random.random_integers(image_rows - patch_size)
+        col = np.random.random_integers(image_cols - patch_size)
+
+        # Pick the right image and extract the patch
+        img = train_mmap[p % image_rows]
+        patch = img[row:row + patch_size, col:col + patch_size, :]
+        res[i] = patch.flatten()
+
+    return np.vstack(res)
 
 
 class KMeansFeatures(object):
     """
     Implements Kmeans feature learning as per Adam Coates' MATLAB code
+
+    Before using this, be sure ot run classes.crop_images_to_mmap to generate the training and test data
+
+    fit() is the primary entry point for training the data
+    transform() is the
+
+    Parameters:
+    ==========
+    rf_size: int
+        The size of the receptive fields (patches)
+
+    num_centroids: int
+
+    whitening: bool
+        Perform ZCA whitening?
+
+    num_patches: int
+        The numbe rof patches to sample
+
+    Properties:
+    ===========
+    patches: ndarray of shape (num_patchs, rf_size^2 * 3)
+        ndarray of the patches.  If patches are 2x2 with three color channels, then stores a single patch as an array of
+        dimension (1, 12) -- i.e. it is flattened
+
+    trainX: memory mapped ndarray
+        training data
+
+    testX: memory mapped ndarray
+        test data
+
+    centroids: ???
+
     """
 
-    def __init__(self, rf_size=6, num_centroids=1600, whitening=True, num_patches=400000, cores=1):
+    def __init__(self, rf_size=6, num_centroids=1600, whitening=True, num_patches=400000):
         self.rf_size = rf_size
         self.num_centroids = num_centroids
         self.whitening = whitening
         self.num_patches = num_patches
         self.patches = np.zeros((num_patches, rf_size * rf_size * 3))
+
+        # these appear to be hard coded and are basically constant -- probably don't need to store these on the object
         self.dim = np.array([150, 150, 3])
-        self.id = get_training_data()[:, 0]
+        # These actually do not need to be stored here -- the TrainSolutions class encapsulates these information
+        # And it is instantiated with classes, so it is always available
+        # id is an ndarray of training image ids
+        self.id = train_solutions.iids
+        # n is then the number of training images
         self.n = self.id.shape[0]
+
+        # Fields for the results
         self.centroids = None
-        self.cores = cores
+
+        # Training data
         self.trainX = np.memmap('data/train_cropped_150.memmap', mode='r', shape=(N_TRAIN, 150, 150, 3))
         self.testX = np.memmap('data/test_cropped_150.memmap', mode='r', shape=(N_TEST, 150, 150, 3))
 
     def extract_patches(self):
-        for i in range(self.num_patches):
-            if (i + 1) % 1000 == 0:
-                print 'Extract patch {0} / {1}'.format(i + 1, self.num_patches)
+        """
+        Extracts patches from the training data
+        Does this by looping through the images, taking one patch from each image, until we get the number
+        of patches we want
+        """
+        # Find out the number of threads to split into
+        cores = multiprocessing.cpu_count()
+        patch_rng = range(self.num_patches)
+        chunk_size = int(math.ceil(self.num_patches / cores))
 
-            row = np.random.random_integers(self.dim[0] - self.rf_size)
-            col = np.random.random_integers(self.dim[1] - self.rf_size)
+        # Gives a list of tuples, with the list lenght being equal to the number of cores, and each tuple containing
+        # The original range split into chunks.  The shortest chunk is padded with Nones
+        # For why this works, see http://docs.python.org/2/library/functions.html#zip
+        patch_chunks = list(itertools.izip_longest(*[iter(patch_rng)] * chunk_size))
 
-            # img = RawImage(TRAIN_IMAGE_PATH + '/' + str(int(self.id[i % self.n])) + '.jpg')
-            # img.crop(150)
-
-            img = self.trainX[i % self.n]
-            patch = img[row:row + self.rf_size, col:col + self.rf_size, :]
-            self.patches[i, :] = patch.flatten()
+        logger.info("Extracting patches in {} jobs, chunk sizes: {}".format(cores, [len(x) for x in patch_chunks]))
+        res = Parallel(n_jobs=cores, verbose=3)(delayed(chunked_extract_patch)(x, self.trainX, 6) for x in patch_chunks)
+        self.patches = np.vstack(res)
 
     def normalize(self):
+        """
+        Normalizes each patch by subtracting mean and dividing by variance
+        """
         temp1 = self.patches - self.patches.mean(1, keepdims=True)
+        # Why plus 10 and sqrt?
         temp2 = np.sqrt(self.patches.var(1, keepdims=True) + 10)
 
         self.patches = temp1 / temp2
 
     def whiten(self):
+        """
+        ZCA whitening
+        """
         cov = np.cov(self.patches, rowvar=0)
         self.mean = self.patches.mean(0, keepdims=True)
         d, v = np.linalg.eig(cov)
@@ -424,15 +514,23 @@ class KMeansFeatures(object):
         self.centroids = kmeans.cluster_centers_
 
     def fit(self):
+        logger.info("Extracting patches")
         self.extract_patches()
+        logger.info("Normalizing")
         self.normalize()
+        logger.info("Whitening")
         self.whiten()
+        logger.info("Clustering")
         self.cluster()
 
         # clean up
         # self.patches = None
 
     def extract_features(self, x):
+        # patches = np.vstack((self.im2col(x[:, :, 0]),
+        #                      self.im2col(x[:, :, 1]),
+        #                      self.im2col(x[:, :, 2]))).T
+
         patches = np.vstack((self.rolling_block(x[:, :, 0]),
                              self.rolling_block(x[:, :, 1]),
                              self.rolling_block(x[:, :, 2]))).T
