@@ -7,13 +7,8 @@ import classes
 import numpy as np
 import logging
 from constants import *
-from sklearn.decomposition import RandomizedPCA
-from sklearn.pipeline import Pipeline
-from sklearn.grid_search import GridSearchCV
-from sklearn.ensemble import RandomForestRegressor
 import models
 from sklearn.cross_validation import KFold
-from IPython import embed
 
 logger = logging.getLogger('galaxy')
 
@@ -131,7 +126,7 @@ def unique_rows(data):
 
 def svr_rf():
     # subsample
-    train_y = classes.get_training_data()
+    train_y = classes.train_solutions.data
 
     # randomly sample 10% Y and select the gid's
     n = 7000
@@ -156,9 +151,9 @@ def svr_rf():
 
     for train, test in kf:
         ridge_rf = models.SVR.SVRRFModel()
-        ridge_rf.fit(train_x[train, :], train_y[train, 1:])
+        ridge_rf.fit(train_x[train, :], train_y[train, :])
         res = ridge_rf.predict(train_x[test, :])
-        classes.rmse(train_y[test, 1:], res)
+        classes.rmse(train_y[test, :], res)
 
     # transform images
 
@@ -166,12 +161,12 @@ def svr_rf():
 
 
 def kmeans_ridge_rf():
-    km = classes.KMeansFeatures(rf_size=6, num_centroids=100, num_patches=400000)
+    km = models.KMeansFeatures.KMeansFeatures(rf_size=6, num_centroids=100, num_patches=400000)
     km.fit()
     n = 7000
 
     train_x = km.transform(n)
-    train_y = classes.get_training_data()[0:n, 1:]
+    train_y = classes.train_solutions.data[0:n, :]
 
     kf = KFold(n, n_folds=2, shuffle=True)
 

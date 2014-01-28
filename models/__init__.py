@@ -3,7 +3,8 @@ __all__ = [
     'RandomForest',
     'Base',
     'Ridge',
-    'SVR'
+    'SVR',
+    'KMeansFeatures'
 ]
 
 import Benchmarks
@@ -11,3 +12,4 @@ import RandomForest
 import Base
 import Ridge
 import SVR
+import KMeansFeatures
