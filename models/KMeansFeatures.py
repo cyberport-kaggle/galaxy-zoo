@@ -180,18 +180,6 @@ class KMeansFeatures(object):
 
         return res
 
-    def show_centroids(self):
-        fig = pyplot.figure(1, (10., 10.))
-        grid = ImageGrid(fig, 111,  # similar to subplot(111)
-                         nrows_ncols=(20, 20),  # creates 20x20 grid of axes
-                         axes_pad=0.1,  # pad between axes in inch.
-        )
-
-        for grid_pos, i in enumerate(np.random.choice(self.centroids.shape[0], 400, replace=False)):
-            grid[grid_pos].imshow(self.centroids[i].reshape(self.rf_size, self.rf_size, 3))  # The AxesGrid object work as a list of axes.
-
-        pyplot.show()
-
 
 def show_centroids(centroids, centroid_size, reshape=(3, 6, 6), swap_axis=None):
     """
