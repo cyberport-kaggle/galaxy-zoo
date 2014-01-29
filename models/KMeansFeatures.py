@@ -4,9 +4,10 @@ import itertools
 import math
 from joblib import Parallel, delayed
 from matplotlib import pyplot
+from matplotlib.colors import Normalize
 import numpy as np
 from numpy.lib.stride_tricks import as_strided
-from sklearn.cluster import MiniBatchKMeans
+from sklearn.cluster import MiniBatchKMeans, KMeans
 from mpl_toolkits.axes_grid1 import ImageGrid
 import classes
 import logging
@@ -101,8 +102,6 @@ class KMeansFeatures(object):
         self.whitening = whitening
         self.num_patches = num_patches
         self.patches = np.zeros((num_patches, rf_size * rf_size * 3))
-        # these appear to be hard coded and are basically constant -- probably don't need to store these on the object
-        self.dim = np.array([150, 150, 3])
 
         # Fields for the results - populated after self.fit()
         self.centroids = None  # shape (num_centroids, rf_size * rf_size * channels)
@@ -145,8 +144,16 @@ class KMeansFeatures(object):
         self.patches = np.dot(self.patches - self.mean, self.p)
 
     def cluster(self):
-        kmeans = MiniBatchKMeans(n_clusters=self.num_centroids, verbose=True, batch_size=1000)
+        # kmeans = MiniBatchKMeans(n_clusters=self.num_centroids,
+        #                          verbose=True,
+        #                          batch_size=self.num_centroids * 20,
+        #                          compute_labels=False,
+        #                          max_iter=5,
+        #                          max_no_improvement=None,
+        # )
+        kmeans = KMeans(n_clusters=self.num_centroids, verbose=10, n_jobs=-1)
         kmeans.fit(self.patches)
+        self.kmeans = kmeans
         self.centroids = kmeans.cluster_centers_
 
     def fit(self, trainX):
@@ -184,13 +191,26 @@ class KMeansFeatures(object):
 
         fig = pyplot.figure(1, (4., 4.))
         grid = ImageGrid(fig, 111,  # similar to subplot(111)
-                         nrows_ncols=(10, 10),  # creates 10x10 grid of axes
+                         nrows_ncols=(20, 20),  # creates 20x20 grid of axes
                          axes_pad=0.1,  # pad between axes in inch.
         )
 
-        for grid_pos, i in enumerate(np.random.choice(self.centroids.shape[0], 100, replace=False)):
-            grid[grid_pos].imshow(self.centroids[i].reshape(self.rf_size, self.rf_size, 3))  # The AxesGrid object work as a list of axes.
+        for grid_pos, i in enumerate(np.random.choice(self.centroids.shape[0], 400, replace=False)):
+            grid[grid_pos].imshow(self.centroids[i].reshape(3, self.rf_size, self.rf_size).swapaxes(0, 2))  # The AxesGrid object work as a list of axes.
 
+        pyplot.show()
+
+
+def show_centroids(centroids, reshape=(3, 6, 6)):
+        fig = pyplot.figure(1, (4., 4.))
+        grid = ImageGrid(fig, 111,  # similar to subplot(111)
+                         nrows_ncols=(20, 20),  # creates 20x20 grid of axes
+                         axes_pad=0.1,  # pad between axes in inch.
+        )
+
+        for grid_pos, i in enumerate(np.random.choice(centroids.shape[0], 400, replace=False)):
+            norm = Normalize(vmin=-1.5, vmax=1.5, clip=True)
+            grid[grid_pos].imshow(centroids[i].reshape(reshape).swapaxes(0, 2), norm=norm)  # The AxesGrid object work as a list of axes.
         pyplot.show()
 
 
