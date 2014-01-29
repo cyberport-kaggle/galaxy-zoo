@@ -12,6 +12,7 @@ from mpl_toolkits.axes_grid1 import ImageGrid
 import classes
 import logging
 from constants import *
+from IPython import embed
 
 logger = logging.getLogger('galaxy')
 
@@ -118,7 +119,8 @@ class KMeansFeatures(object):
         of patches we want
         """
         # Find out the number of threads to split into
-        cores = multiprocessing.cpu_count()
+        # cores = multiprocessing.cpu_count()
+        cores = 1
         patch_rng = range(self.num_patches)
         chunk_size = int(math.ceil(self.num_patches / cores))
 
@@ -144,14 +146,7 @@ class KMeansFeatures(object):
         self.patches = np.dot(self.patches - self.mean, self.p)
 
     def cluster(self):
-        # kmeans = MiniBatchKMeans(n_clusters=self.num_centroids,
-        #                          verbose=True,
-        #                          batch_size=self.num_centroids * 20,
-        #                          compute_labels=False,
-        #                          max_iter=5,
-        #                          max_no_improvement=None,
-        # )
-        kmeans = KMeans(n_clusters=self.num_centroids, verbose=10, n_jobs=-1)
+        kmeans = MiniBatchKMeans(n_clusters=self.num_centroids, verbose=True, batch_size=self.num_centroids * 20)
         kmeans.fit(self.patches)
         self.kmeans = kmeans
         self.centroids = kmeans.cluster_centers_
@@ -186,17 +181,14 @@ class KMeansFeatures(object):
         return res
 
     def show_centroids(self):
-        im = np.arange(100)
-        im.shape = 10, 10
-
-        fig = pyplot.figure(1, (4., 4.))
+        fig = pyplot.figure(1, (10., 10.))
         grid = ImageGrid(fig, 111,  # similar to subplot(111)
                          nrows_ncols=(20, 20),  # creates 20x20 grid of axes
                          axes_pad=0.1,  # pad between axes in inch.
         )
 
         for grid_pos, i in enumerate(np.random.choice(self.centroids.shape[0], 400, replace=False)):
-            grid[grid_pos].imshow(self.centroids[i].reshape(3, self.rf_size, self.rf_size).swapaxes(0, 2))  # The AxesGrid object work as a list of axes.
+            grid[grid_pos].imshow(self.centroids[i].reshape(self.rf_size, self.rf_size, 3))  # The AxesGrid object work as a list of axes.
 
         pyplot.show()
 

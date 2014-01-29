@@ -9,6 +9,7 @@ import logging
 from constants import *
 import models
 from sklearn.cross_validation import KFold
+from IPython import embed
 
 logger = logging.getLogger('galaxy')
 
@@ -175,7 +176,7 @@ def svr_rf():
 
 
 def kmeans_ridge_rf():
-    km = models.KMeansFeatures.KMeansFeatures(rf_size=6, num_centroids=100, num_patches=400000)
+    km = models.KMeansFeatures.KMeansFeatures(rf_size=6, num_centroids=1600, num_patches=400000)
     trainX = np.memmap('data/train_cropped_150.memmap', mode='r', shape=(N_TRAIN, 150, 150, 3))
     testX = np.memmap('data/test_cropped_150.memmap', mode='r', shape=(N_TEST, 150, 150, 3))  # Not used yet
     km.fit(trainX)
@@ -195,4 +196,12 @@ def kmeans_ridge_rf():
         res = clf.predict(train_x[test])
         classes.rmse(train_y[test], res)
 
-kmeans_ridge_rf()
+
+def kmeans_centroids():
+    km = models.KMeansFeatures.KMeansFeatures(rf_size=6, num_centroids=1600, num_patches=400000)
+    trainX = np.memmap('data/train_cropped_150.memmap', mode='r', shape=(N_TRAIN, 150, 150, 3))
+    testX = np.memmap('data/test_cropped_150.memmap', mode='r', shape=(N_TEST, 150, 150, 3))  # Not used yet
+    km.fit(trainX)
+    embed()
+
+kmeans_centroids()
