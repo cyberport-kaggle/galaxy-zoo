@@ -7,13 +7,8 @@ import classes
 import numpy as np
 import logging
 from constants import *
-from sklearn.decomposition import RandomizedPCA
-from sklearn.pipeline import Pipeline
-from sklearn.grid_search import GridSearchCV
-from sklearn.ensemble import RandomForestRegressor
 import models
 from sklearn.cross_validation import KFold
-from IPython import embed
 
 logger = logging.getLogger('galaxy')
 
@@ -64,6 +59,20 @@ def random_forest_001(outfile="sub_random_forest_001.csv", n_jobs=1):
     predictions = model.run('predict')
     output = classes.Submission(predictions)
     output.to_file(outfile)
+
+
+def random_forest_002(outfile="sub_random_forest_002.csv", n_jobs=4):
+    """
+    Random forest, but with all pixels in a 150x150 crop then rescaled to 15x15 instead of grid sampling
+
+    CV results on 10% of the dataset with 50 trees:
+
+    2014-01-29 16:55:38 - Base - INFO - Cross validation completed in 629.936481953.  Scores:
+    2014-01-29 16:55:38 - Base - INFO - [-0.13233799 -0.13254755]
+    # Not any better than the sampling
+    """
+    mdl = models.RandomForest.RandomForestMoreFeatures(n_jobs=n_jobs, cv_sample=0.1)
+    mdl.run('cv')
 
 
 def extra_trees_test(n_jobs=1):
@@ -156,9 +165,9 @@ def svr_rf():
 
     for train, test in kf:
         ridge_rf = models.SVR.SVRRFModel()
-        ridge_rf.fit(train_x[train, :], train_y[train, 1:])
+        ridge_rf.fit(train_x[train, :], train_y[train, :])
         res = ridge_rf.predict(train_x[test, :])
-        classes.rmse(train_y[test, 1:], res)
+        classes.rmse(train_y[test, :], res)
 
     # transform images
 
@@ -167,11 +176,16 @@ def svr_rf():
 
 def kmeans_ridge_rf():
     km = models.KMeansFeatures.KMeansFeatures(rf_size=6, num_centroids=100, num_patches=400000)
-    km.fit()
+    trainX = np.memmap('data/train_cropped_150.memmap', mode='r', shape=(N_TRAIN, 150, 150, 3))
+    testX = np.memmap('data/test_cropped_150.memmap', mode='r', shape=(N_TEST, 150, 150, 3))  # Not used yet
+    km.fit(trainX)
     n = 7000
 
-    train_x = km.transform(n)
-    train_y = classes.get_training_data()[0:n, 1:]
+    train_x = km.transform(trainX[0:n, :])
+    train_y = classes.train_solutions.data[0:n, :]
+
+    logger.info("Train x shape: {}".format(train_x.shape))
+    logger.info("Train y shape: {}".format(train_y.shape))
 
     kf = KFold(n, n_folds=2, shuffle=True)
 

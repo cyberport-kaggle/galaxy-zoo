@@ -1,3 +1,4 @@
+from __future__ import division
 from sklearn import ensemble
 import classes
 from models.Base import BaseModel, CascadeModel
@@ -20,6 +21,24 @@ class RandomForestModel(GridSample75Mixin, BaseModel):
         'oob_score': True,
     }
     estimator_class = ensemble.RandomForestRegressor
+
+
+class RandomForestMoreFeatures(BaseModel):
+    train_predictors_file = 'data/data_random_forest_train_002.npy'
+    test_predictors_file = 'data/data_random_forest_test_002.npy'
+    n_features = 675
+    estimator_defaults = {
+        'n_estimators': 50,
+        'random_state': 0,
+        'verbose': 3,
+        'oob_score': True,
+    }
+    estimator_class = ensemble.RandomForestRegressor
+
+    @staticmethod
+    def process_image(img):
+        data = img.crop(150).rescale(0.1).data.copy()
+        return data.flatten().astype('float64') / 225
 
 
 class RandomForestCascadeModel(GridSample75Mixin, CascadeModel):

@@ -332,6 +332,7 @@ class RawImage(object):
 
     def rescale(self, scale):
         self.data = rescale(self.data, scale)
+        return self
 
     @property
     def central_pixel_coordinates(self):

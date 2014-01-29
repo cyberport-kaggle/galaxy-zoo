@@ -110,8 +110,7 @@ class KMeansFeatures(object):
         self.mean = None  # column means (1, rf_size * rf_size * channels)
 
         # Training data
-        self.trainX = np.memmap('data/train_cropped_150.memmap', mode='r', shape=(N_TRAIN, 150, 150, 3))
-        self.testX = np.memmap('data/test_cropped_150.memmap', mode='r', shape=(N_TEST, 150, 150, 3))
+        self.trainX = None
 
     def extract_patches(self):
         """
@@ -133,16 +132,6 @@ class KMeansFeatures(object):
         res = Parallel(n_jobs=cores, verbose=3)(delayed(chunked_extract_patch)(x, self.trainX, 6) for x in patch_chunks)
         self.patches = np.vstack(res)
 
-    def normalize(self):
-        """
-        Normalizes each patch by subtracting mean and dividing by variance
-        """
-        temp1 = self.patches - self.patches.mean(1, keepdims=True)
-        # Why plus 10 and sqrt?
-        temp2 = np.sqrt(self.patches.var(1, keepdims=True) + 10)
-
-        self.patches = temp1 / temp2
-
     def whiten(self):
         """
         ZCA whitening
@@ -160,11 +149,12 @@ class KMeansFeatures(object):
         kmeans.fit(self.patches)
         self.centroids = kmeans.cluster_centers_
 
-    def fit(self):
+    def fit(self, trainX):
+        self.trainX = trainX
         logger.info("Extracting patches")
         self.extract_patches()
         logger.info("Normalizing")
-        self.normalize()
+        self.patches = normalize(self.patches)
         logger.info("Whitening")
         self.whiten()
         logger.info("Clustering")
@@ -173,20 +163,16 @@ class KMeansFeatures(object):
         # clean up
         # self.patches = None
 
-    def transform(self, n):
-        if n > self.trainX.shape[0]:
-            n = self.trainX.shape[0]
-
-        res = np.zeros((n, self.num_centroids * 4))
-
+    def transform(self, x):
         cores = multiprocessing.cpu_count()
+        n = x.shape[0]
         rng = range(n)
         chunk_size = int(math.ceil(n / cores))
         chunks = list(itertools.izip_longest(*[iter(rng)] * chunk_size))
-        logger.info("Transforming in {} jobs, chunk sizes: {}".format(cores, [len(x) for x in chunks]))
+        logger.info("Transforming in {} jobs, chunk sizes: {}".format(cores, [len(c) for c in chunks]))
 
         res = Parallel(n_jobs=cores, verbose=3)(
-            delayed(chunked_extract_features)(i, self.trainX, self.rf_size, self.centroids, self.mean, self.p, self.whitening) for i in chunks
+            delayed(chunked_extract_features)(i, x, self.rf_size, self.centroids, self.mean, self.p, self.whitening) for i in chunks
         )
         res = np.vstack(res)
 
@@ -208,7 +194,17 @@ class KMeansFeatures(object):
         pyplot.show()
 
 
-def chunked_extract_features(idx, trainX, rf_size, centroids, mean, p, whitening=True):
+def normalize(x):
+    """
+    Normalizes each patch by subtracting mean and dividing by variance
+    """
+    temp1 = x - x.mean(1, keepdims=True)
+    temp2 = np.sqrt(x.var(1, keepdims=True) + 10)
+
+    return temp1 / temp2
+
+
+def chunked_extract_features(idx, x, rf_size, centroids, mean, p, whitening=True):
     """
     Receives a list of image indices to extract features from
 
@@ -233,15 +229,13 @@ def chunked_extract_features(idx, trainX, rf_size, centroids, mean, p, whitening
         if (i + 1) % 10 == 0:
             logger.info("Extracting features on image {} / {}".format(i + 1, len(idx)))
 
-        x = trainX[img_idx]
+        x = x[img_idx]
         patches = np.vstack((rolling_block(x[:, :, 0], rf_size),
                              rolling_block(x[:, :, 1], rf_size),
                              rolling_block(x[:, :, 2], rf_size))).T
 
         # normalize for contrast
-        temp1 = patches - patches.mean(1, keepdims=True)
-        temp2 = np.sqrt(patches.var(1, keepdims=True) + 10)
-        patches = temp1 / temp2
+        patches = normalize(patches)
 
         if whitening:
             patches = np.dot(patches - mean, p)
