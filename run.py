@@ -64,9 +64,14 @@ def random_forest_001(outfile="sub_random_forest_001.csv", n_jobs=1):
 def random_forest_002(outfile="sub_random_forest_002.csv", n_jobs=4):
     """
     Random forest, but with all pixels in a 150x150 crop then rescaled to 15x15 instead of grid sampling
+
+    CV results on 10% of the dataset with 50 trees:
+
+    2014-01-29 16:55:38 - Base - INFO - Cross validation completed in 629.936481953.  Scores:
+    2014-01-29 16:55:38 - Base - INFO - [-0.13233799 -0.13254755]
+    # Not any better than the sampling
     """
     mdl = models.RandomForest.RandomForestMoreFeatures(n_jobs=n_jobs, cv_sample=0.1)
-    mdl.run('train')
     mdl.run('cv')
 
 
@@ -172,6 +177,7 @@ def svr_rf():
 def kmeans_ridge_rf():
     km = models.KMeansFeatures.KMeansFeatures(rf_size=6, num_centroids=100, num_patches=400000)
     trainX = np.memmap('data/train_cropped_150.memmap', mode='r', shape=(N_TRAIN, 150, 150, 3))
+    testX = np.memmap('data/test_cropped_150.memmap', mode='r', shape=(N_TEST, 150, 150, 3))  # Not used yet
     km.fit(trainX)
     n = 7000
 

@@ -111,7 +111,6 @@ class KMeansFeatures(object):
 
         # Training data
         self.trainX = None
-        self.testX = np.memmap('data/test_cropped_150.memmap', mode='r', shape=(N_TEST, 150, 150, 3))
 
     def extract_patches(self):
         """
@@ -132,15 +131,6 @@ class KMeansFeatures(object):
         logger.info("Extracting patches in {} jobs, chunk sizes: {}".format(cores, [len(x) for x in patch_chunks]))
         res = Parallel(n_jobs=cores, verbose=3)(delayed(chunked_extract_patch)(x, self.trainX, 6) for x in patch_chunks)
         self.patches = np.vstack(res)
-
-    def normalize(self):
-        """
-        Normalizes each patch by subtracting mean and dividing by variance
-        """
-        temp1 = self.patches - self.patches.mean(1, keepdims=True)
-        temp2 = np.sqrt(self.patches.var(1, keepdims=True) + 10)
-
-        self.patches = temp1 / temp2
 
     def whiten(self):
         """
@@ -164,7 +154,7 @@ class KMeansFeatures(object):
         logger.info("Extracting patches")
         self.extract_patches()
         logger.info("Normalizing")
-        self.normalize()
+        self.patches = normalize(self.patches)
         logger.info("Whitening")
         self.whiten()
         logger.info("Clustering")
@@ -204,6 +194,16 @@ class KMeansFeatures(object):
         pyplot.show()
 
 
+def normalize(x):
+    """
+    Normalizes each patch by subtracting mean and dividing by variance
+    """
+    temp1 = x - x.mean(1, keepdims=True)
+    temp2 = np.sqrt(x.var(1, keepdims=True) + 10)
+
+    return temp1 / temp2
+
+
 def chunked_extract_features(idx, x, rf_size, centroids, mean, p, whitening=True):
     """
     Receives a list of image indices to extract features from
@@ -235,9 +235,7 @@ def chunked_extract_features(idx, x, rf_size, centroids, mean, p, whitening=True
                              rolling_block(x[:, :, 2], rf_size))).T
 
         # normalize for contrast
-        temp1 = patches - patches.mean(1, keepdims=True)
-        temp2 = np.sqrt(patches.var(1, keepdims=True) + 10)
-        patches = temp1 / temp2
+        patches = normalize(patches)
 
         if whitening:
             patches = np.dot(patches - mean, p)
