@@ -61,7 +61,7 @@ def random_forest_001(outfile="sub_random_forest_001.csv", n_jobs=1):
     output.to_file(outfile)
 
 
-def random_forest_002(outfile="sub_random_forest_002.csv", n_jobs=3):
+def random_forest_002(outfile="sub_random_forest_002.csv", n_jobs=4):
     """
     Random forest, but with all pixels in a 150x150 crop then rescaled to 15x15 instead of grid sampling
     """
@@ -171,10 +171,11 @@ def svr_rf():
 
 def kmeans_ridge_rf():
     km = models.KMeansFeatures.KMeansFeatures(rf_size=6, num_centroids=100, num_patches=400000)
-    km.fit()
+    trainX = np.memmap('data/train_cropped_150.memmap', mode='r', shape=(N_TRAIN, 150, 150, 3))
+    km.fit(trainX)
     n = 7000
 
-    train_x = km.transform(n)
+    train_x = km.transform(trainX[0:n, :])
     train_y = classes.train_solutions.data[0:n, :]
 
     logger.info("Train x shape: {}".format(train_x.shape))

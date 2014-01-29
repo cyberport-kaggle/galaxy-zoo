@@ -28,9 +28,9 @@ class RandomForestMoreFeatures(BaseModel):
     test_predictors_file = 'data/data_random_forest_test_002.npy'
     n_features = 675
     estimator_defaults = {
-        'n_estimators': 250,
+        'n_estimators': 50,
         'random_state': 0,
-        'verbose': 1,
+        'verbose': 3,
         'oob_score': True,
     }
     estimator_class = ensemble.RandomForestRegressor
