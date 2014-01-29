@@ -193,17 +193,39 @@ class KMeansFeatures(object):
         pyplot.show()
 
 
-def show_centroids(centroids, reshape=(3, 6, 6)):
-        fig = pyplot.figure(1, (4., 4.))
-        grid = ImageGrid(fig, 111,  # similar to subplot(111)
-                         nrows_ncols=(20, 20),  # creates 20x20 grid of axes
-                         axes_pad=0.1,  # pad between axes in inch.
-        )
+def show_centroids(centroids, centroid_size, reshape=(3, 6, 6), swap_axis=None):
+    """
+    Shows centroids.  Expects centroids to be a (n_centroids, n_pixels) array.
+    Reshape controls how each centroid is reshaped.  if reshape is none, then no reshaping is done
 
-        for grid_pos, i in enumerate(np.random.choice(centroids.shape[0], 400, replace=False)):
-            norm = Normalize(vmin=-1.5, vmax=1.5, clip=True)
-            grid[grid_pos].imshow(centroids[i].reshape(reshape).swapaxes(0, 2), norm=norm)  # The AxesGrid object work as a list of axes.
-        pyplot.show()
+    General strategy is to calculate what size x by x grid we want, reshape each centroid, place in grid, then show the whole image
+    """
+    n_centroids = centroids.shape[0]
+    # Infer the number of channels in the centroid
+    channels = centroids.shape[1] / (centroid_size ** 2)
+    cols = int(math.sqrt(n_centroids))
+    rows = math.ceil(n_centroids / cols)
+    # Add 1 pixel for padding
+    image_size = (centroid_size + 1)
+    images = np.ones((image_size * rows, image_size * cols, channels))
+    for i in xrange(n_centroids):
+        this_image = centroids[i]
+        if reshape:
+            this_image = this_image.reshape(reshape)
+        if swap_axis:
+            this_image = this_image.swapaxes(*swap_axis)
+        offset_col = image_size * (i % cols)
+        offset_col_end = offset_col + image_size - 1
+        offset_row = image_size * (math.floor(i / cols))
+        offset_row_end = offset_row + image_size - 1
+        images[offset_row:offset_row_end, offset_col:offset_col_end] = this_image
+
+    # Normalize it all
+    min = -1.5
+    max = 1.5
+    images = (images - min) / (max - min)
+    pyplot.imshow(images)
+    pyplot.show()
 
 
 def normalize(x):
