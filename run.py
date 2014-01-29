@@ -61,6 +61,15 @@ def random_forest_001(outfile="sub_random_forest_001.csv", n_jobs=1):
     output.to_file(outfile)
 
 
+def random_forest_002(outfile="sub_random_forest_002.csv", n_jobs=3):
+    """
+    Random forest, but with all pixels in a 150x150 crop then rescaled to 15x15 instead of grid sampling
+    """
+    mdl = models.RandomForest.RandomForestMoreFeatures(n_jobs=n_jobs, cv_sample=0.1)
+    mdl.run('train')
+    mdl.run('cv')
+
+
 def extra_trees_test(n_jobs=1):
     """
     Exact same as random_forest_001, but using ExtraTreesRegressor to see if that method is any better
@@ -168,6 +177,9 @@ def kmeans_ridge_rf():
     train_x = km.transform(n)
     train_y = classes.train_solutions.data[0:n, :]
 
+    logger.info("Train x shape: {}".format(train_x.shape))
+    logger.info("Train y shape: {}".format(train_y.shape))
+
     kf = KFold(n, n_folds=2, shuffle=True)
 
     for train, test in kf:
@@ -175,5 +187,3 @@ def kmeans_ridge_rf():
         clf.fit(train_x[train], train_y[train])
         res = clf.predict(train_x[test])
         classes.rmse(train_y[test], res)
-
-kmeans_ridge_rf()
