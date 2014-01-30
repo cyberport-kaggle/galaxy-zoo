@@ -146,7 +146,10 @@ class KMeansFeatures(object):
         self.patches = np.dot(self.patches - self.mean, self.p)
 
     def cluster(self):
-        kmeans = MiniBatchKMeans(n_clusters=self.num_centroids, verbose=True, batch_size=self.num_centroids * 20)
+        # kmeans = MiniBatchKMeans(n_clusters=self.num_centroids, verbose=True, batch_size=self.num_centroids * 20,
+        #                          compute_labels=False, n_init=1, max_no_improvement=3)
+        kmeans = KMeans(n_clusters=self.num_centroids, verbose=True, n_jobs=1, n_init=1)
+
         kmeans.fit(self.patches)
         self.kmeans = kmeans
         self.centroids = kmeans.cluster_centers_
@@ -300,3 +303,14 @@ def rolling_block(A, block_size):
     res = np.copy(as_strided(A, shape=shape, strides=strides))
     res = res.reshape(shape[0] * shape[1], shape[2] * shape[3]).T
     return res
+
+
+def unique_rows(data):
+    """
+    Returns the number of unique rows in a 2D NumPy array.
+    Using it to check the number of duplicated clusters in K-Means learning
+    @param data:
+    @return:
+    """
+    data_set = set([tuple(row) for row in data])
+    return len(data_set)

@@ -128,17 +128,6 @@ def ridge_rf_001(outfile='sub_ridge_rf_001.csv'):
     sub.to_file(outfile)
 
 
-def unique_rows(data):
-    """
-    Returns the number of unique rows in a 2D NumPy array.
-    Using it to check the number of duplicated clusters in K-Means learning
-    @param data:
-    @return:
-    """
-    data_set = set([tuple(row) for row in data])
-    return len(data_set)
-
-
 def svr_rf():
     # subsample
     train_y = classes.train_solutions.data
@@ -203,5 +192,6 @@ def kmeans_centroids():
     testX = np.memmap('data/test_cropped_150.memmap', mode='r', shape=(N_TEST, 150, 150, 3))  # Not used yet
     km.fit(trainX)
     embed()
+    models.KMeansFeatures.show_centroids(km.centroids, (6, 6, 3))
 
 kmeans_centroids()
