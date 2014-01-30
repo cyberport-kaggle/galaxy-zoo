@@ -4,15 +4,13 @@ import itertools
 import math
 from joblib import Parallel, delayed
 from matplotlib import pyplot
-from matplotlib.colors import Normalize
 import numpy as np
 from numpy.lib.stride_tricks import as_strided
 from sklearn.cluster import MiniBatchKMeans, KMeans
-from mpl_toolkits.axes_grid1 import ImageGrid
+from sklearn.feature_extraction.image import extract_patches_2d
 import classes
 import logging
 from constants import *
-from IPython import embed
 
 logger = logging.getLogger('galaxy')
 
@@ -41,18 +39,18 @@ def chunked_extract_patch(patch_nums, train_mmap, patch_size):
     # Filter out any Nones that might have been passed in
     patch_nums = [x for x in patch_nums if x is not None]
     res = [None] * len(patch_nums)
+    # train_mmap is of dimensions (n_training, image_rows, image_cols, channels)
+    n_images = train_mmap.shape[0]
+    image_rows = train_mmap.shape[1]
+    image_cols = train_mmap.shape[2]
 
     for i, p in enumerate(patch_nums):
-        # train_mmap is of dimensions (n_training, image_rows, image_cols, channels)
-        image_rows = train_mmap.shape[1]
-        image_cols = train_mmap.shape[2]
-
         # Randomly get an offset
-        row = np.random.random_integers(image_rows - patch_size)
-        col = np.random.random_integers(image_cols - patch_size)
+        row = np.random.randint(image_rows - patch_size + 1)
+        col = np.random.randint(image_cols - patch_size + 1)
 
         # Pick the right image and extract the patch
-        img = train_mmap[p % image_rows]
+        img = train_mmap[p % n_images]
         patch = img[row:row + patch_size, col:col + patch_size, :]
         res[i] = patch.flatten()
 
@@ -119,8 +117,8 @@ class KMeansFeatures(object):
         of patches we want
         """
         # Find out the number of threads to split into
-        # cores = multiprocessing.cpu_count()
-        cores = 1
+        cores = multiprocessing.cpu_count()
+        # cores = 1
         patch_rng = range(self.num_patches)
         chunk_size = int(math.ceil(self.num_patches / cores))
 
@@ -146,9 +144,9 @@ class KMeansFeatures(object):
         self.patches = np.dot(self.patches - self.mean, self.p)
 
     def cluster(self):
-        # kmeans = MiniBatchKMeans(n_clusters=self.num_centroids, verbose=True, batch_size=self.num_centroids * 20,
-        #                          compute_labels=False, n_init=1, max_no_improvement=3)
-        kmeans = KMeans(n_clusters=self.num_centroids, verbose=True, n_jobs=1, n_init=1)
+        kmeans = MiniBatchKMeans(n_clusters=self.num_centroids, verbose=True, batch_size=self.num_centroids * 20,
+                                 compute_labels=False)
+        # kmeans = KMeans(n_clusters=self.num_centroids, verbose=True, n_jobs=1, n_init=1)
 
         kmeans.fit(self.patches)
         self.kmeans = kmeans
