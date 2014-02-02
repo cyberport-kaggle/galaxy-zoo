@@ -181,6 +181,43 @@ class KMeansFeatures(object):
 
         return res
 
+    def save_to_file(self, file_base):
+        """
+        Saves the patch size, centroids, mean, and p to files for reloading.  Assumes whitening is always true
+        """
+        file_path = './data/' + file_base
+        centroids_path = file_path + '_centroids.npy'
+        logger.info('Saving centroids to {}'.format(centroids_path))
+        np.save(centroids_path, self.centroids)
+
+        means_path = file_path + '_means.npy'
+        logger.info("Saving means to {}".format(means_path))
+        np.save(means_path, self.mean)
+
+        p_path = file_path + '_p.npy'
+        logger.info("Saving p to {}".format(p_path))
+        np.save(p_path, self.p)
+
+    @classmethod
+    def load_from_file(cls, file_base, rf_size=6):
+        """
+        loads in patch size, centroids, mean, and p
+        """
+        instance = cls(rf_size=rf_size, whitening=True)
+        file_path = './data/' + file_base
+        centroids_path = file_path + '_centroids.npy'
+        logger.info('Loading centroids from {}'.format(centroids_path))
+        instance.centroids = np.load(centroids_path)
+
+        means_path = file_path + '_means.npy'
+        logger.info("Loading means from {}".format(means_path))
+        instance.mean = np.load(means_path)
+
+        p_path = file_path + '_p.npy'
+        logger.info("Loading p from {}".format(p_path))
+        instance.p = np.load(p_path)
+        return instance
+
 
 def show_centroids(centroids, centroid_size, reshape=(3, 6, 6), swap_axis=None):
     """
