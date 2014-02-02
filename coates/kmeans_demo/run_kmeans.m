@@ -5,7 +5,8 @@ function centroids = run_kmeans(X, k, iterations)
 
 
   % element-size square, then sum rows
-  % x2 is matrix of shape (n_pathes, 1)
+  % x2 is matrix of shape (n_patches, 1)
+  % should be the total squared (normalized) intensity of all pixels in each patch
   x2 = sum(X.^2,2);
 
   % centroids = random matrix of shape (k, n_pixels)
@@ -49,6 +50,9 @@ function centroids = run_kmeans(X, k, iterations)
             c2
            )
           );
+
+      % doesn't seem to be returned...
+      % total intensity for the patches in the batch * 0.5
       loss = loss + sum(0.5*x2(i:lastIndex) - val');
       
       S = sparse(1:m,labels,1,m,k,m); % labels as indicator matrix

@@ -38,4 +38,3 @@ if __name__ == "__main__":
     mdl = models.KMeansFeatures.KMeansFeatures(rf_size=6, num_centroids=1600, num_patches=400000)
     mdl.fit(rdata)
     models.KMeansFeatures.show_centroids(mdl.centroids, 6, reshape=(6, 6, 3))
-    embed()
