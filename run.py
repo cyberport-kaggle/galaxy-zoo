@@ -10,6 +10,8 @@ from constants import *
 import models
 from sklearn.cross_validation import KFold
 from IPython import embed
+import cPickle as pickle
+import time
 
 logger = logging.getLogger('galaxy')
 
@@ -164,14 +166,24 @@ def svr_rf():
     # cv and training
 
 
-def kmeans_ridge_rf():
+def kmeans_ridge_rf(fit_centroids=False):
     """
     Be sure to run classes.crop_to_mmap before using this
     """
-    km = models.KMeansFeatures.KMeansFeatures(rf_size=6, num_centroids=1600, num_patches=400000)
     trainX = np.memmap('data/train_cropped_150.memmap', mode='r', shape=(N_TRAIN, 150, 150, 3))
-    testX = np.memmap('data/test_cropped_150.memmap', mode='r', shape=(N_TEST, 150, 150, 3))  # Not used yet
-    km.fit(trainX)
+    # Not used yet
+    testX = np.memmap('data/test_cropped_150.memmap', mode='r', shape=(N_TEST, 150, 150, 3))
+
+    if fit_centroids:
+        km = models.KMeansFeatures.KMeansFeatures(rf_size=6, num_centroids=1600, num_patches=10000)
+        km.fit(trainX)
+
+        t0 = time.time()
+        # pickle.dump(km, open('data/kmeans_centroids.pkl', mode='wb'))
+        print 'Pickling the KMeansFeatures object took {0} seconds'.format(time.time() - t0)
+    else:
+        km = pickle.load(open('data/kmeans_centroids.pkl'))
+
     n = 7000
 
     train_x = km.transform(trainX[0:n, :])
@@ -189,10 +201,26 @@ def kmeans_ridge_rf():
         classes.rmse(train_y[test], res)
 
 
-def kmeans_centroids():
-    km = models.KMeansFeatures.KMeansFeatures(rf_size=6, num_centroids=1600, num_patches=400000)
+def kmeans_centroids(fit_centroids=False):
+    """
+    If fit_centroids is True, we extract patches, fit the centroids and pickle the object
+                        False, we unpickle the object.
+    @param fit_centroids:
+    @return:
+    """
+
     trainX = np.memmap('data/train_cropped_150.memmap', mode='r', shape=(N_TRAIN, 150, 150, 3))
-    testX = np.memmap('data/test_cropped_150.memmap', mode='r', shape=(N_TEST, 150, 150, 3))  # Not used yet
-    km.fit(trainX)
-    embed()
-    models.KMeansFeatures.show_centroids(km.centroids, (6, 6, 3))
+    # Not used yet
+    testX = np.memmap('data/test_cropped_150.memmap', mode='r', shape=(N_TEST, 150, 150, 3))
+
+    if fit_centroids:
+        km = models.KMeansFeatures.KMeansFeatures(rf_size=6, num_centroids=1600, num_patches=400000)
+        km.fit(trainX)
+
+        t0 = time.time()
+        pickle.dump(km, open('data/kmeans_centroids.pkl', mode='wb'))
+        print 'Pickling the KMeansFeatures object took {0} seconds'.format(time.time() - t0)
+    else:
+        km = pickle.load(open('data/kmeans_centroids.pkl'))
+
+    models.KMeansFeatures.show_centroids(km.centroids, 6, (6, 6, 3))
