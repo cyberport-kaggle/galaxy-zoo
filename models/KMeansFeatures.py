@@ -118,7 +118,7 @@ class KMeansFeatures(object):
         """
         # Find out the number of threads to split into
         cores = multiprocessing.cpu_count()
-        # cores = 1
+        cores = 1
         patch_rng = range(self.num_patches)
         chunk_size = int(math.ceil(self.num_patches / cores))
 
@@ -144,9 +144,9 @@ class KMeansFeatures(object):
         self.patches = np.dot(self.patches - self.mean, self.p)
 
     def cluster(self):
-        kmeans = MiniBatchKMeans(n_clusters=self.num_centroids, verbose=True, batch_size=self.num_centroids * 20,
-                                 compute_labels=False)
-        # kmeans = KMeans(n_clusters=self.num_centroids, verbose=True, n_jobs=1, n_init=1)
+        # kmeans = MiniBatchKMeans(n_clusters=self.num_centroids, verbose=True, batch_size=self.num_centroids * 20,
+        #                          compute_labels=False)
+        kmeans = KMeans(n_clusters=self.num_centroids, verbose=True, n_jobs=1, n_init=1)
 
         kmeans.fit(self.patches)
         self.kmeans = kmeans
@@ -164,10 +164,11 @@ class KMeansFeatures(object):
         self.cluster()
 
         # clean up
-        # self.patches = None
+        self.patches = None
 
     def transform(self, x):
         cores = multiprocessing.cpu_count()
+        cores = 1
         n = x.shape[0]
         rng = range(n)
         chunk_size = int(math.ceil(n / cores))
