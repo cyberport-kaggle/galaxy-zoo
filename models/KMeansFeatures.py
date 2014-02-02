@@ -227,7 +227,7 @@ def normalize(x):
     return temp1 / temp2
 
 
-def chunked_extract_features(idx, x, rf_size, centroids, mean, p, whitening=True):
+def chunked_extract_features(idx, X, rf_size, centroids, mean, p, whitening=True):
     """
     Receives a list of image indices to extract features from
 
@@ -246,16 +246,16 @@ def chunked_extract_features(idx, x, rf_size, centroids, mean, p, whitening=True
 
     p: ndarray
     """
-    idx = [x for x in idx if x is not None]
+    idx = [y for y in idx if y is not None]
     res = [None] * len(idx)
     for i, img_idx in enumerate(idx):
         if (i + 1) % 10 == 0:
             logger.info("Extracting features on image {} / {}".format(i + 1, len(idx)))
 
-        x = x[img_idx]
-        patches = np.vstack((rolling_block(x[:, :, 0], rf_size),
-                             rolling_block(x[:, :, 1], rf_size),
-                             rolling_block(x[:, :, 2], rf_size))).T
+        this_x = X[img_idx]
+        patches = np.vstack((rolling_block(this_x[:, :, 0], rf_size),
+                             rolling_block(this_x[:, :, 1], rf_size),
+                             rolling_block(this_x[:, :, 2], rf_size))).T
 
         # normalize for contrast
         patches = normalize(patches)

@@ -165,6 +165,9 @@ def svr_rf():
 
 
 def kmeans_ridge_rf():
+    """
+    Be sure to run classes.crop_to_mmap before using this
+    """
     km = models.KMeansFeatures.KMeansFeatures(rf_size=6, num_centroids=1600, num_patches=400000)
     trainX = np.memmap('data/train_cropped_150.memmap', mode='r', shape=(N_TRAIN, 150, 150, 3))
     testX = np.memmap('data/test_cropped_150.memmap', mode='r', shape=(N_TEST, 150, 150, 3))  # Not used yet
@@ -193,5 +196,3 @@ def kmeans_centroids():
     km.fit(trainX)
     embed()
     models.KMeansFeatures.show_centroids(km.centroids, (6, 6, 3))
-
-kmeans_centroids()

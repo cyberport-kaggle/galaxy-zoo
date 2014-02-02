@@ -195,7 +195,6 @@ def crop_to_memmap(crop_size=150, training=True):
     """
     Crop all training and testing images into two memmap array
     Train - the images will be in the same order as the train solutions files
-    @return:
     """
 
     if training:
