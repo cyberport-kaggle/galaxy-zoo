@@ -15,7 +15,6 @@ function centroids = run_kmeans(X, k, iterations)
   
   
   for itr = 1:iterations
-    fprintf('K-means iteration %d / %d\n', itr, iterations);
 
     % c2 = matrix of shape (k, 1)
     c2 = 0.5*sum(centroids.^2,2);
@@ -79,4 +78,5 @@ function centroids = run_kmeans(X, k, iterations)
     % just zap empty centroids so they don't introduce NaNs everywhere.
     badIndex = find(counts == 0);
     centroids(badIndex, :) = 0;
+    fprintf('K-means iteration %d / %d, loss %f\n', itr, iterations, loss);
   end
