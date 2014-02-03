@@ -369,8 +369,8 @@ def spherical_kmeans(X, k, n_iter, batch_size=1000):
         c2 = 0.5 * np.sum(centroids ** 2, 1, keepdims=True)
 
         # shape (k, n_pixels)
-        summation = np.zeros(k, X.size[1])
-        counts = np.zeros(k, 1)
+        summation = np.zeros((k, X.shape[1]))
+        counts = np.zeros((k, 1))
         loss = 0
 
         for i in xrange(0, X.shape[0], batch_size):
@@ -378,23 +378,23 @@ def spherical_kmeans(X, k, n_iter, batch_size=1000):
             m = last_index - i
 
             # shape (k, batch_size) - shape (k, 1)
-            tmp = (centroids * X[i:last_index, :].T) - c2
+            tmp = np.dot(centroids, X[i:last_index, :].T) - c2
             # shape (batch_size, )
             indices = np.argmax(tmp, 0)
-            # shape (batch_size, )
-            val = np.max(tmp, 0)
+            # shape (1, batch_size)
+            val = np.max(tmp, 0, keepdims=True)
 
-            loss += np.sum(0.5 * x2[i:last_index] - val)
+            loss += np.sum((0.5 * x2[i:last_index]) - val.T)
 
             # Don't use a sparse matrix here
             S = np.zeros((batch_size, k))
             S[range(batch_size), indices] = 1
 
             # shape (k, n_pixels)
-            this_sum = S.T * X[i:last_index, :]
+            this_sum = np.dot(S.T, X[i:last_index, :])
             summation += this_sum
 
-            this_counts = np.sum(S, 0, keepdims=True)
+            this_counts = np.sum(S, 0, keepdims=True).T
             counts += this_counts
 
         centroids = summation / counts
@@ -403,3 +403,24 @@ def spherical_kmeans(X, k, n_iter, batch_size=1000):
         centroids[bad_indices, :] = 0
 
         logger.info("K-means iteration {} of {}, loss {}".format(i, n_iter + 1, loss))
+
+
+"""
+from cifar import *
+import ipdb
+
+data = [get_batch(i)['data'] for i in range(1, 6)]
+data = np.vstack(data)
+rdata = data.reshape((50000, 3, 32, 32))
+rdata = rdata.swapaxes(1, 3)
+rdata = rdata.swapaxes(1, 2)
+
+mdl = models.KMeansFeatures.KMeansFeatures(rf_size=6, num_centroids=1600, num_patches=400000)
+mdl.trainX = rdata
+mdl.extract_patches()
+mdl.patches = models.KMeansFeatures.normalize(mdl.patches)
+mdl.whiten()
+
+ipdb.run('models.KMeansFeatures.spherical_kmeans(mdl.patches, 1600, 50)')
+
+"""

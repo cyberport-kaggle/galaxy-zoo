@@ -37,7 +37,7 @@ function centroids = run_kmeans(X, k, iterations)
         % subset X for the rows in the batch, so shape is (batch_size, n_pixels) transposed
         % centroids is (k, n_pixels)
         % tmp is then shape of (k, batch_size)
-      tmp = centroids*X(i:lastIndex,:)',
+      tmp = centroids*X(i:lastIndex,:)';
 
         % max gets the maximum in each column of the matrix
         % val is the max value, of shape (1, batch_size)
