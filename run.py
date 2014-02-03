@@ -175,19 +175,23 @@ def kmeans_ridge_rf(fit_centroids=False):
     testX = np.memmap('data/test_cropped_150.memmap', mode='r', shape=(N_TEST, 150, 150, 3))
 
     if fit_centroids:
-        km = models.KMeansFeatures.KMeansFeatures(rf_size=6, num_centroids=1600, num_patches=10000)
+        km = models.KMeansFeatures.KMeansFeatures(rf_size=6, num_centroids=1600, num_patches=400000)
         km.fit(trainX)
 
-        t0 = time.time()
+        km.save_to_file('mdl_kmeans_ridge_rf_001')
+        # t0 = time.time()
         # pickle.dump(km, open('data/kmeans_centroids.pkl', mode='wb'))
-        print 'Pickling the KMeansFeatures object took {0} seconds'.format(time.time() - t0)
+        # print 'Pickling the KMeansFeatures object took {0} seconds'.format(time.time() - t0)
     else:
-        km = pickle.load(open('data/kmeans_centroids.pkl'))
+        km = models.KMeansFeatures.KMeansFeatures.load_from_file('mdl_kmeans_ridge_rf_001')
+        # km = pickle.load(open('data/kmeans_centroids.pkl'))
 
-    n = 7000
+    n = 10000
 
     train_x = km.transform(trainX[0:n, :])
     train_y = classes.train_solutions.data[0:n, :]
+    # train_x = km.transform(trainX)
+    # train_y = classes.train_solutions.data
 
     logger.info("Train x shape: {}".format(train_x.shape))
     logger.info("Train y shape: {}".format(train_y.shape))
