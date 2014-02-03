@@ -410,14 +410,67 @@ def spherical_kmeans(X, k, n_iter, batch_size=1000):
     return centroids
 
 
-# DOES NOT WORK YET
-def _process_batches(X, offset, chunk_size, batch_size, centroids, c2, x2, k):
+def parallel_spherical_kmeans(X, k, n_iter, batch_size=1000):
+    """
+    spherical kmeans in parallel.  Unfortunately not that much faster.  Non-parallel takes about
+    a minute per iteration on my machine, and this takes 40 seconds per iteration.
+
+    Probably because of the overhead involved in threading things out.
+    """
+
+    # shape (k, 1)
+    x2 = np.sum(X**2, 1, keepdims=True)
+
+    # randomly initialize centroids
+    centroids = np.random.randn(k, X.shape[1]) * 0.1
+
+    for iteration in xrange(1, n_iter + 1):
+        # shape (k, 1)
+        c2 = 0.5 * np.sum(centroids ** 2, 1, keepdims=True)
+
+        # shape (k, n_pixels)
+        summation = np.zeros((k, X.shape[1]))
+        counts = np.zeros((k, 1))
+        loss = 0
+
+        # Parallelizes by splitting X's rows into groups
+        # Each subprocess gets a group, and traverses that group in batches
+        cores = multiprocessing.cpu_count()
+        chunk_size = int(math.floor(X.shape[0] / cores))
+        ranges = [(0 + (i * chunk_size), 0 + ((i + 1) * chunk_size)) for i in range(cores)]
+        # Any remainders get attached to the last chunk
+        ranges[-1] = (ranges[-1][0], X.shape[0])
+
+        logger.info("Chunked with offsets {} and chunk size {}".format(ranges, chunk_size))
+        # Gets back an array of (summation, counts, loss) tuples
+        res = Parallel(n_jobs=cores, verbose=3)(
+            delayed(_process_batches)(X, start, end, batch_size, centroids, c2, x2, k) for start, end in ranges
+        )
+
+        for this_sum, this_count, this_loss in res:
+            summation += this_sum
+            counts += this_count
+            loss += this_loss
+
+        # Sometimes raises RuntimeWarnings because some counts can be 0
+        centroids = summation / counts
+
+        bad_indices = np.where(counts == 0)[0]
+        centroids[bad_indices, :] = 0
+
+        assert not np.any(np.isnan(centroids))
+
+        logger.info("K-means iteration {} of {}, loss {}".format(iteration, n_iter, loss))
+    return centroids
+
+
+def _process_batches(X, start, end, batch_size, centroids, c2, x2, k):
     loss = 0
     summation = np.zeros((k, X.shape[1]))
     counts = np.zeros((k, 1))
 
-    for i in xrange(offset, offset + chunk_size, batch_size):
-        last_index = min(i + batch_size, X.shape[0])
+    for i in xrange(start, end, batch_size):
+        last_index = min(i + batch_size, end)
         m = last_index - i
 
         # shape (k, batch_size) - shape (k, 1)
@@ -440,7 +493,7 @@ def _process_batches(X, offset, chunk_size, batch_size, centroids, c2, x2, k):
         this_counts = np.sum(S, 0, keepdims=True).T
         counts += this_counts
 
-    return summation, counts
+    return summation, counts, loss
 
 
 """
@@ -461,9 +514,7 @@ mdl.whiten()
 
 # ipdb.run('models.KMeansFeatures.spherical_kmeans(mdl.patches, 1600, 50)')
 
-centroids = models.KMeansFeatures.spherical_kmeans(mdl.patches, 1600, 50)
-
-From octave code:
+centroids = models.KMeansFeatures.spherical_kmeans(mdl.patches, 1600, 10)
 
 K-means iteration 1 / 50, loss 7929682.156621
 K-means iteration 2 / 50, loss 6360819.903194
