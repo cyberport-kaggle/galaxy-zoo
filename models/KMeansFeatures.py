@@ -2,6 +2,7 @@ from __future__ import division
 import multiprocessing
 import itertools
 import math
+import ipdb
 from joblib import Parallel, delayed
 from matplotlib import pyplot
 import numpy as np
@@ -364,7 +365,7 @@ def spherical_kmeans(X, k, n_iter, batch_size=1000):
     # randomly initialize centroids
     centroids = np.random.randn(k, X.shape[1]) * 0.1
 
-    for i in xrange(1, n_iter + 1):
+    for iteration in xrange(1, n_iter + 1):
         # shape (k, 1)
         c2 = 0.5 * np.sum(centroids ** 2, 1, keepdims=True)
 
@@ -397,12 +398,49 @@ def spherical_kmeans(X, k, n_iter, batch_size=1000):
             this_counts = np.sum(S, 0, keepdims=True).T
             counts += this_counts
 
+        # Sometimes raises RuntimeWarnings because some counts can be 0
         centroids = summation / counts
 
         bad_indices = np.where(counts == 0)[0]
         centroids[bad_indices, :] = 0
 
-        logger.info("K-means iteration {} of {}, loss {}".format(i, n_iter + 1, loss))
+        assert not np.any(np.isnan(centroids))
+
+        logger.info("K-means iteration {} of {}, loss {}".format(iteration, n_iter, loss))
+    return centroids
+
+
+# DOES NOT WORK YET
+def _process_batches(X, offset, chunk_size, batch_size, centroids, c2, x2, k):
+    loss = 0
+    summation = np.zeros((k, X.shape[1]))
+    counts = np.zeros((k, 1))
+
+    for i in xrange(offset, offset + chunk_size, batch_size):
+        last_index = min(i + batch_size, X.shape[0])
+        m = last_index - i
+
+        # shape (k, batch_size) - shape (k, 1)
+        tmp = np.dot(centroids, X[i:last_index, :].T) - c2
+        # shape (batch_size, )
+        indices = np.argmax(tmp, 0)
+        # shape (1, batch_size)
+        val = np.max(tmp, 0, keepdims=True)
+
+        loss += np.sum((0.5 * x2[i:last_index]) - val.T)
+
+        # Don't use a sparse matrix here
+        S = np.zeros((batch_size, k))
+        S[range(batch_size), indices] = 1
+
+        # shape (k, n_pixels)
+        this_sum = np.dot(S.T, X[i:last_index, :])
+        summation += this_sum
+
+        this_counts = np.sum(S, 0, keepdims=True).T
+        counts += this_counts
+
+    return summation, counts
 
 
 """
@@ -421,6 +459,61 @@ mdl.extract_patches()
 mdl.patches = models.KMeansFeatures.normalize(mdl.patches)
 mdl.whiten()
 
-ipdb.run('models.KMeansFeatures.spherical_kmeans(mdl.patches, 1600, 50)')
+# ipdb.run('models.KMeansFeatures.spherical_kmeans(mdl.patches, 1600, 50)')
+
+centroids = models.KMeansFeatures.spherical_kmeans(mdl.patches, 1600, 50)
+
+From octave code:
+
+K-means iteration 1 / 50, loss 7929682.156621
+K-means iteration 2 / 50, loss 6360819.903194
+K-means iteration 3 / 50, loss 5845735.334416
+K-means iteration 4 / 50, loss 5662207.157659
+K-means iteration 5 / 50, loss 5576102.374176
+K-means iteration 6 / 50, loss 5527709.879265
+K-means iteration 7 / 50, loss 5497342.736403
+K-means iteration 8 / 50, loss 5476660.157031
+K-means iteration 9 / 50, loss 5461946.867995
+K-means iteration 10 / 50, loss 5450773.459769
+K-means iteration 11 / 50, loss 5441964.667322
+K-means iteration 12 / 50, loss 5434968.280210
+K-means iteration 13 / 50, loss 5429328.339294
+K-means iteration 14 / 50, loss 5424500.268900
+K-means iteration 15 / 50, loss 5420282.964752
+K-means iteration 16 / 50, loss 5416694.390692
+K-means iteration 17 / 50, loss 5413672.757183
+K-means iteration 18 / 50, loss 5411071.651387
+K-means iteration 19 / 50, loss 5408777.344397
+K-means iteration 20 / 50, loss 5406771.207412
+K-means iteration 21 / 50, loss 5404987.410941
+K-means iteration 22 / 50, loss 5403393.323705
+K-means iteration 23 / 50, loss 5401991.038828
+K-means iteration 24 / 50, loss 5400678.657783
+K-means iteration 25 / 50, loss 5399466.917830
+K-means iteration 26 / 50, loss 5398354.264769
+K-means iteration 27 / 50, loss 5397318.404619
+K-means iteration 28 / 50, loss 5396398.170130
+K-means iteration 29 / 50, loss 5395568.792654
+K-means iteration 30 / 50, loss 5394815.573593
+K-means iteration 31 / 50, loss 5394129.751249
+K-means iteration 32 / 50, loss 5393487.839848
+K-means iteration 33 / 50, loss 5392907.159336
+K-means iteration 34 / 50, loss 5392365.621484
+K-means iteration 35 / 50, loss 5391848.820510
+K-means iteration 36 / 50, loss 5391386.130618
+K-means iteration 37 / 50, loss 5390965.156332
+K-means iteration 38 / 50, loss 5390565.283935
+K-means iteration 39 / 50, loss 5390192.369274
+K-means iteration 40 / 50, loss 5389848.162731
+K-means iteration 41 / 50, loss 5389510.443807
+K-means iteration 42 / 50, loss 5389206.547821
+K-means iteration 43 / 50, loss 5388940.929436
+K-means iteration 44 / 50, loss 5388683.464927
+K-means iteration 45 / 50, loss 5388430.057730
+K-means iteration 46 / 50, loss 5388187.639730
+K-means iteration 47 / 50, loss 5387962.393151
+K-means iteration 48 / 50, loss 5387738.482807
+K-means iteration 49 / 50, loss 5387525.722404
+K-means iteration 50 / 50, loss 5387330.119329
 
 """
