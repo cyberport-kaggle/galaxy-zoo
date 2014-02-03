@@ -2,14 +2,10 @@ from __future__ import division
 import multiprocessing
 import itertools
 import math
-import ipdb
 from joblib import Parallel, delayed
 from matplotlib import pyplot
 import numpy as np
 from numpy.lib.stride_tricks import as_strided
-from sklearn.cluster import MiniBatchKMeans, KMeans
-from sklearn.feature_extraction.image import extract_patches_2d
-import classes
 import logging
 from constants import *
 
@@ -144,14 +140,8 @@ class KMeansFeatures(object):
         self.patches = np.dot(self.patches - self.mean, self.p)
 
     def cluster(self):
-        cores = multiprocessing.cpu_count()
-        kmeans = MiniBatchKMeans(n_clusters=self.num_centroids, verbose=True, batch_size=self.num_centroids * 20,
-                                 compute_labels=False)
-        # kmeans = KMeans(n_clusters=self.num_centroids, verbose=True, n_jobs=cores, n_init=1)
-
-        kmeans.fit(self.patches)
-        self.kmeans = kmeans
-        self.centroids = kmeans.cluster_centers_
+        # In practice, the algorithm converges pretty quickly.  15-20 should be enough iterations
+        self.centroids = spherical_kmeans(self.patches, self.num_centroids, 20)
 
     def fit(self, trainX):
         self.trainX = trainX
