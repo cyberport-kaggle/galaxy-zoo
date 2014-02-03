@@ -349,3 +349,57 @@ def unique_rows(data):
     """
     data_set = set([tuple(row) for row in data])
     return len(data_set)
+
+
+def spherical_kmeans(X, k, n_iter, batch_size=1000):
+    """
+    Do a spherical k-means.  Line by line port of Coates' matlab code.
+
+    Returns a (k, n_pixels) centroids matrix
+    """
+
+    # shape (k, 1)
+    x2 = np.sum(X**2, 1, keepdims=True)
+
+    # randomly initialize centroids
+    centroids = np.random.randn(k, X.shape[1]) * 0.1
+
+    for i in xrange(1, n_iter + 1):
+        # shape (k, 1)
+        c2 = 0.5 * np.sum(centroids ** 2, 1, keepdims=True)
+
+        # shape (k, n_pixels)
+        summation = np.zeros(k, X.size[1])
+        counts = np.zeros(k, 1)
+        loss = 0
+
+        for i in xrange(0, X.shape[0], batch_size):
+            last_index = min(i + batch_size, X.shape[0])
+            m = last_index - i
+
+            # shape (k, batch_size) - shape (k, 1)
+            tmp = (centroids * X[i:last_index, :].T) - c2
+            # shape (batch_size, )
+            indices = np.argmax(tmp, 0)
+            # shape (batch_size, )
+            val = np.max(tmp, 0)
+
+            loss += np.sum(0.5 * x2[i:last_index] - val)
+
+            # Don't use a sparse matrix here
+            S = np.zeros((batch_size, k))
+            S[range(batch_size), indices] = 1
+
+            # shape (k, n_pixels)
+            this_sum = S.T * X[i:last_index, :]
+            summation += this_sum
+
+            this_counts = np.sum(S, 0, keepdims=True)
+            counts += this_counts
+
+        centroids = summation / counts
+
+        bad_indices = np.where(counts == 0)[0]
+        centroids[bad_indices, :] = 0
+
+        logger.info("K-means iteration {} of {}, loss {}".format(i, n_iter + 1, loss))

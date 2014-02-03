@@ -6,7 +6,6 @@ function centroids = run_kmeans(X, k, iterations)
 
   % element-size square, then sum rows
   % x2 is matrix of shape (n_patches, 1)
-  % should be the total squared (normalized) intensity of all pixels in each patch
   x2 = sum(X.^2,2);
 
   % centroids = random matrix of shape (k, n_pixels)
@@ -31,7 +30,7 @@ function centroids = run_kmeans(X, k, iterations)
     for i=1:BATCH_SIZE:size(X,1)
         % Index of of the last item in the batch
       lastIndex=min(i+BATCH_SIZE-1, size(X,1));
-      $ m is the number of samples in this batch
+      % m is the number of samples in this batch
       m = lastIndex - i + 1;
 
 
@@ -41,8 +40,8 @@ function centroids = run_kmeans(X, k, iterations)
       tmp = centroids*X(i:lastIndex,:)',
 
         % max gets the maximum in each column of the matrix
-        % val is the max value, of shape (1, n_pixels)
-        % labels is the index of the max value, of shape (1, n_pixels)
+        % val is the max value, of shape (1, batch_size)
+        % labels is the index of the max value, of shape (1, batch_size)
       [val,labels] = max(
       % subtracts c2 from each column of tmp
           bsxfun(@minus,
@@ -52,11 +51,25 @@ function centroids = run_kmeans(X, k, iterations)
           );
 
       % doesn't seem to be returned...
-      % total intensity for the patches in the batch * 0.5
+      % sum((batch_size, 1) - (batch_size, 1))
       loss = loss + sum(0.5*x2(i:lastIndex) - val');
-      
-      S = sparse(1:m,labels,1,m,k,m); % labels as indicator matrix
+
+        % gives us a sparse array of 1s.  Each row is all zeros, and one 1.  the 1 is in the column
+        % corresponding to the cluster center to which it is.... ???
+        % array size is (batch_size, k)
+      S = sparse(1:m,  % 1 to batch size (1, batch_size)
+      labels,  % batch_size length labels (1, batch_size)
+      1, % 1
+      m, % batch size  % n rows
+      k, % 1600  % n cols
+      m); % maximum number of non-zeros, which is just batch_size % labels as indicator matrix
+
+      % (k, batch_size) * (batch_size, n_pixels)
+      % summation is (k, n_pixels)
       summation = summation + S'*X(i:lastIndex,:);
+
+      % counts is (k, 1)
+      % This is the number of samples in each cluster
       counts = counts + sum(S,1)';
     end
 
