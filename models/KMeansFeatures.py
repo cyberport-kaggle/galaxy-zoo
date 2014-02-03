@@ -123,7 +123,7 @@ class KMeansFeatures(object):
         # For why this works, see http://docs.python.org/2/library/functions.html#zip
         patch_chunks = list(itertools.izip_longest(*[iter(patch_rng)] * chunk_size))
 
-        logger.info("Extracting patches in {} jobs, chunk sizes: {}".format(cores, [len(x) for x in patch_chunks]))
+        logger.info("Extracting patches in {} jobs, chunk sizes: {}".format(cores, len(patch_chunks[0])))
         res = Parallel(n_jobs=cores, verbose=3)(delayed(chunked_extract_patch)(x, self.trainX, 6) for x in patch_chunks)
         self.patches = np.vstack(res)
 
@@ -163,7 +163,7 @@ class KMeansFeatures(object):
         rng = range(n)
         chunk_size = int(math.ceil(n / cores))
         chunks = list(itertools.izip_longest(*[iter(rng)] * chunk_size))
-        logger.info("Transforming in {} jobs, chunk sizes: {}".format(cores, [len(c) for c in chunks]))
+        logger.info("Transforming in {} jobs, chunk sizes: {}".format(cores, len(chunks[0])))
 
         res = Parallel(n_jobs=cores, verbose=3)(
             delayed(chunked_extract_features)(i, x, self.rf_size, self.centroids, self.mean, self.p, self.whitening) for i in chunks
