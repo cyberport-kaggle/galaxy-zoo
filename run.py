@@ -2,6 +2,7 @@
 Run scripts for individual models in Galaxy Zoo
 """
 import time
+from sklearn.ensemble import RandomForestRegressor
 
 import classes
 import numpy as np
@@ -186,7 +187,7 @@ def kmeans_ridge_rf(fit_centroids=False):
         km = models.KMeansFeatures.KMeansFeatures.load_from_file('mdl_kmeans_ridge_rf_001')
         # km = pickle.load(open('data/kmeans_centroids.pkl'))
 
-    n = 10000
+    n = 4000
 
     train_x = km.transform(trainX[0:n, :])
     train_y = classes.train_solutions.data[0:n, :]
@@ -199,7 +200,9 @@ def kmeans_ridge_rf(fit_centroids=False):
     kf = KFold(n, n_folds=2, shuffle=True)
 
     for train, test in kf:
-        clf = models.Ridge.RidgeRFEstimator()
+        # clf = models.Ridge.RidgeRFEstimator()
+        # clf.rf_rgn = RandomForestRegressor(n_estimators=250, n_jobs=4, verbose=3)
+        clf = RandomForestRegressor(n_estimators=50, n_jobs=4, verbose=3, random_state=0, oob_score=True)
         clf.fit(train_x[train], train_y[train])
         res = clf.predict(train_x[test])
         classes.rmse(train_y[test], res)
@@ -228,3 +231,35 @@ def kmeans_centroids(fit_centroids=False):
         km = pickle.load(open('data/kmeans_centroids.pkl'))
 
     models.KMeansFeatures.show_centroids(km.centroids, 6, (6, 6, 3))
+
+"""
+
+import time
+from sklearn.ensemble import RandomForestRegressor
+
+import classes
+import numpy as np
+import logging
+from constants import *
+import models
+from sklearn.cross_validation import KFold
+from IPython import embed
+import cPickle as pickle
+import time
+
+logger = logging.getLogger('galaxy')
+
+trainX = np.memmap('data/train_cropped_150.memmap', mode='r', shape=(N_TRAIN, 150, 150, 3))
+# Not used yet
+testX = np.memmap('data/test_cropped_150.memmap', mode='r', shape=(N_TEST, 150, 150, 3))
+
+km = models.KMeansFeatures.KMeansFeatures(rf_size=50, num_centroids=1600, num_patches=5000)
+km.trainX = trainX
+km.extract_patches()
+
+a = km.patches[0:1600, :]
+models.KMeansFeatures.show_centroids(a, 50, reshape=(50, 50, 3))
+
+a = mdl.patches[0:1600, :]
+models.KMeansFeatures.show_centroids(a, 6, reshape=(6, 6, 3))
+ """

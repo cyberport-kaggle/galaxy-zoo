@@ -124,7 +124,7 @@ class KMeansFeatures(object):
         patch_chunks = list(itertools.izip_longest(*[iter(patch_rng)] * chunk_size))
 
         logger.info("Extracting patches in {} jobs, chunk sizes: {}".format(cores, len(patch_chunks[0])))
-        res = Parallel(n_jobs=cores, verbose=3)(delayed(chunked_extract_patch)(x, self.trainX, 6) for x in patch_chunks)
+        res = Parallel(n_jobs=cores, verbose=3)(delayed(chunked_extract_patch)(x, self.trainX, self.rf_size) for x in patch_chunks)
         self.patches = np.vstack(res)
 
     def whiten(self):
@@ -210,7 +210,7 @@ class KMeansFeatures(object):
         return instance
 
 
-def show_centroids(centroids, centroid_size, reshape=(3, 6, 6), swap_axis=None):
+def show_centroids(centroids, centroid_size, reshape=(3, 6, 6), swap_axis=None, normalize=True):
     """
     Shows centroids.  Expects centroids to be a (n_centroids, n_pixels) array.
     Reshape controls how each centroid is reshaped.  if reshape is none, then no reshaping is done
@@ -224,7 +224,7 @@ def show_centroids(centroids, centroid_size, reshape=(3, 6, 6), swap_axis=None):
     rows = math.ceil(n_centroids / cols)
     # Add 1 pixel for padding
     image_size = (centroid_size + 1)
-    images = np.ones((image_size * rows, image_size * cols, channels))
+    images = np.ones((image_size * rows, image_size * cols, channels), dtype=np.uint8)
     for i in xrange(n_centroids):
         this_image = centroids[i]
         if reshape:
@@ -237,10 +237,11 @@ def show_centroids(centroids, centroid_size, reshape=(3, 6, 6), swap_axis=None):
         offset_row_end = offset_row + image_size - 1
         images[offset_row:offset_row_end, offset_col:offset_col_end] = this_image
 
-    # Normalize it all
-    min = -1.5
-    max = 1.5
-    images = (images - min) / (max - min)
+    if normalize:
+        # Normalize it all
+        min = -1.5
+        max = 1.5
+        images = (images - min) / (max - min)
     pyplot.imshow(images)
     pyplot.show()
 
