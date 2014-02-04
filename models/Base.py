@@ -87,6 +87,7 @@ class BaseModel(object):
     # This is so that we don't have to iterate over all 70k images every time we fit.
     train_predictors_file = None
     test_predictors_file = None
+    memmap_predictors = False  # Should predictors be saved to a memmap instead of an npy file?
     # Number of features that the model will generate
     n_features = None
     estimator_defaults = None
@@ -160,11 +161,17 @@ class BaseModel(object):
             file_list = train_solutions.filenames
             if os.path.exists(self.train_predictors_file):
                 logger.info("Training predictors already exists, loading from file {}".format(self.train_predictors_file))
-                res = np.load(self.train_predictors_file)
+                if self.memmap_predictors:
+                    pass
+                else:
+                    res = np.load(self.train_predictors_file)
             else:
                 res = self.build_features(file_list, True)
                 logger.info("Caching training predictors to {}".format(self.train_predictors_file))
-                np.save(self.train_predictors_file, res)
+                if self.memmap_predictors:
+                    pass
+                else:
+                    np.save(self.train_predictors_file, res)
             self.train_x = res
 
     def build_test_predictors(self):
@@ -356,6 +363,22 @@ class BaseModel(object):
         Subclasses should implement this method
         """
         raise NotImplementedError("Subclasses of BaseModel should implement process_image")
+
+
+class KMeansModel(BaseModel):
+    """
+    Borrows from BaseModel, but doesn't build the train or test predictors
+
+    Intended for use with feature generator models
+    """
+    def __init__(self, feature_generator, train_source, test_source, *args, **kwargs):
+        self.feature_generator = feature_generator
+        self.train_source = train_source
+        self.test_source = test_source
+        super(KMeansModel, self).__init__(*args, **kwargs)
+
+    def build_features(self, *args, **kwargs):
+        return self.feature_generator.transform(self.train_source)
 
 
 class CascadeModel(BaseModel):

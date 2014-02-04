@@ -1,6 +1,8 @@
 """
 Run scripts for individual models in Galaxy Zoo
 """
+import multiprocessing
+import os
 import time
 from sklearn.ensemble import RandomForestRegressor
 
@@ -210,7 +212,7 @@ def kmeans_001(fit_centroids=False):
         classes.rmse(train_y[test], res)
 
 
-def kmeans_002(prep_file=False):
+def kmeans_002():
     """
     Kmeans feature learning, first rescaling images down, then extracting patches, so we get more variation in each patch
     Rescaling to 15 x 15 then taking out patches of 5 x 5
@@ -218,17 +220,36 @@ def kmeans_002(prep_file=False):
     The centroids don't look like anything (splotches of color against mostly gray), but the CV score on 10000 samples and 20 trees
     was .128, which is quite promising.
     """
-    if prep_file:
+    train_mmap_path = 'data/train_cropped_150_scale_15.memmap'
+    test_mmap_path = 'data/test_cropped_150_scale_15.memmap'
+
+    if not os.path.exists(train_mmap_path):
+        logger.info("Prepping training images")
         pre_scale = np.memmap('data/train_cropped_150.memmap', mode='r', shape=(N_TRAIN, 150, 150, 3))
-        trainX = classes.rescale_memmap(15, pre_scale, 'data/train_cropped_150_scale_15.memmap')
+        trainX = classes.rescale_memmap(15, pre_scale, train_mmap_path)
         del pre_scale
     else:
-        trainX = np.memmap('data/train_cropped_150_scale_15.memmap', mode='r', shape=(N_TRAIN, 15, 15, 3))
+        trainX = np.memmap(train_mmap_path, mode='r', shape=(N_TRAIN, 15, 15, 3))
 
-    km = models.KMeansFeatures.KMeansFeatures(rf_size=5, num_centroids=1600, num_patches=400000)
-    km.fit(trainX)
+    if not os.path.exists(test_mmap_path):
+        logger.info("Prepping testing images")
+        pre_scale = np.memmap('data/test_cropped_150.memmap', mode='r', shape=(N_TEST, 150, 150, 3))
+        testX = classes.rescale_memmap(15, pre_scale, test_mmap_path)
+        del pre_scale
+    else:
+        testX = np.memmap(test_mmap_path, mode='r', shape=(N_TEST, 15, 15, 3))
 
-    km.save_to_file('mdl_kmeans_002')
+
+    n_jobs = multiprocessing.cpu_count()
+
+    if not os.path.exists('mdl_kmeans_rf_002_centroids.npy'):
+        km = models.KMeansFeatures.KMeansFeatures(rf_size=5, num_centroids=1600, num_patches=400000)
+        km.fit(trainX)
+        km.save_to_file('mdl_kmeans_rf_002')
+    else:
+        km = models.KMeansFeatures.KMeansFeatures.load_from_file('mdl_kmeans_rf_002', rf_size=5)
+
+    mdl = models.RandomForest.KMeansRandomForest(km, trainX, testX, n_jobs=n_jobs, cv_sample=0.5)
 
 
 

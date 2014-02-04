@@ -1,7 +1,7 @@
 from __future__ import division
 from sklearn import ensemble
 import classes
-from models.Base import BaseModel, CascadeModel
+from models.Base import BaseModel, CascadeModel, KMeansModel
 
 
 class GridSample75Mixin(object):
@@ -64,3 +64,16 @@ class ExtraTreesModel(GridSample75Mixin, BaseModel):
         'verbose': 3,
     }
     estimator_class = ensemble.ExtraTreesRegressor
+
+
+class KMeansRandomForest(KMeansModel):
+    train_predictors_file = 'data/data_kmeans_rf_train_002.memmap'
+    test_predictors_file = 'data/data_kmeans_rf_test_002.memmap'
+    memmap_predictors = True
+    estimator_defaults = {
+        'n_estimators': 250,
+        'random_state': 0,
+        'verbose': 3,
+        'oob_score': True,
+    }
+    estimator_class = ensemble.RandomForestRegressor
