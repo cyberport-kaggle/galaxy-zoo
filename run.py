@@ -214,6 +214,9 @@ def kmeans_002(prep_file=False):
     """
     Kmeans feature learning, first rescaling images down, then extracting patches, so we get more variation in each patch
     Rescaling to 15 x 15 then taking out patches of 5 x 5
+
+    The centroids don't look like anything (splotches of color against mostly gray), but the CV score on 10000 samples and 20 trees
+    was .128, which is quite promising.
     """
     if prep_file:
         pre_scale = np.memmap('data/train_cropped_150.memmap', mode='r', shape=(N_TRAIN, 150, 150, 3))
