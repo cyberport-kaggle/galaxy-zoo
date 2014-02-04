@@ -214,6 +214,23 @@ def crop_to_memmap(crop_size=150, training=True):
         out[i] = img.data
 
 
+def rescale_memmap(new_size, in_memmap, outfile):
+    """
+    Takes an existing memmap, rescales it to a new file
+    """
+    n_images = in_memmap.shape[0]
+    original_size = in_memmap.shape[1]
+    factor = new_size / original_size
+    out = np.memmap(outfile, shape=(n_images, new_size, new_size, 3), mode='w+')
+
+    for i, img in enumerate(in_memmap):
+        if i % 100 == 0:
+            print i
+        out[i] = rescale(img, factor) * 255
+
+    return out
+
+
 class Submission(object):
     """
     Utility function that takes care of some common tasks relating to submissiosn files

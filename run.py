@@ -167,9 +167,11 @@ def svr_rf():
     # cv and training
 
 
-def kmeans_ridge_rf(fit_centroids=False):
+def kmeans_001(fit_centroids=False):
     """
     Be sure to run classes.crop_to_mmap before using this
+
+    This doens't work really well -- we determined that the patches are too small and aren't capturing any features.
     """
     trainX = np.memmap('data/train_cropped_150.memmap', mode='r', shape=(N_TRAIN, 150, 150, 3))
     # Not used yet
@@ -187,7 +189,7 @@ def kmeans_ridge_rf(fit_centroids=False):
         km = models.KMeansFeatures.KMeansFeatures.load_from_file('mdl_kmeans_ridge_rf_001')
         # km = pickle.load(open('data/kmeans_centroids.pkl'))
 
-    n = 4000
+    n = 10000
 
     train_x = km.transform(trainX[0:n, :])
     train_y = classes.train_solutions.data[0:n, :]
@@ -202,10 +204,29 @@ def kmeans_ridge_rf(fit_centroids=False):
     for train, test in kf:
         # clf = models.Ridge.RidgeRFEstimator()
         # clf.rf_rgn = RandomForestRegressor(n_estimators=250, n_jobs=4, verbose=3)
-        clf = RandomForestRegressor(n_estimators=50, n_jobs=4, verbose=3, random_state=0, oob_score=True)
+        clf = RandomForestRegressor(n_estimators=20, n_jobs=4, verbose=3, random_state=0, oob_score=True)
         clf.fit(train_x[train], train_y[train])
         res = clf.predict(train_x[test])
         classes.rmse(train_y[test], res)
+
+
+def kmeans_002(prep_file=False):
+    """
+    Kmeans feature learning, first rescaling images down, then extracting patches, so we get more variation in each patch
+    Rescaling to 15 x 15 then taking out patches of 5 x 5
+    """
+    if prep_file:
+        pre_scale = np.memmap('data/train_cropped_150.memmap', mode='r', shape=(N_TRAIN, 150, 150, 3))
+        trainX = classes.rescale_memmap(15, pre_scale, 'data/train_cropped_150_scale_15.memmap')
+        del pre_scale
+    else:
+        trainX = np.memmap('data/train_cropped_150_scale_15.memmap', mode='r', shape=(N_TRAIN, 15, 15, 3))
+
+    km = models.KMeansFeatures.KMeansFeatures(rf_size=5, num_centroids=1600, num_patches=400000)
+    km.fit(trainX)
+
+    km.save_to_file('mdl_kmeans_002')
+
 
 
 def kmeans_centroids(fit_centroids=False):

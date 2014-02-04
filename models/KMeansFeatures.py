@@ -155,7 +155,7 @@ class KMeansFeatures(object):
         self.cluster()
 
         # clean up
-        self.patches = None
+        # self.patches = None
 
     def transform(self, x):
         cores = multiprocessing.cpu_count()
@@ -278,7 +278,7 @@ def chunked_extract_features(idx, X, rf_size, centroids, mean, p, whitening=True
     idx = [y for y in idx if y is not None]
     res = [None] * len(idx)
     for i, img_idx in enumerate(idx):
-        if (i + 1) % 10 == 0:
+        if (i + 1) % 500 == 0:
             logger.info("Extracting features on image {} / {}".format(i + 1, len(idx)))
 
         this_x = X[img_idx]
@@ -302,8 +302,8 @@ def chunked_extract_features(idx, X, rf_size, centroids, mean, p, whitening=True
 
         # 150 is hard coded in the crop size, which is actually pre-determined by classes.crop_image_to_mmap
         # So don't need to reference the attribute here
-        prows = 150 - rf_size + 1
-        pcols = 150 - rf_size + 1
+        prows = this_x.shape[0] - rf_size + 1
+        pcols = this_x.shape[0] - rf_size + 1
         num_centroids = centroids.shape[0]
         patches = patches.reshape((prows, pcols, num_centroids))
 
