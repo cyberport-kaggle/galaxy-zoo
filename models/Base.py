@@ -370,8 +370,11 @@ class KMeansModel(BaseModel):
         self.test_source = test_source
         super(KMeansModel, self).__init__(*args, **kwargs)
 
-    def build_features(self, *args, **kwargs):
-        return self.feature_generator.transform(self.train_source)
+    def build_features(self, files, training=True, **kwargs):
+        if training:
+            return self.feature_generator.transform(self.train_source)
+        else:
+            return self.feature_generator.transform(self.test_source)
 
 
 class CascadeModel(BaseModel):
