@@ -67,9 +67,8 @@ class ExtraTreesModel(GridSample75Mixin, BaseModel):
 
 
 class KMeansRandomForest(KMeansModel):
-    train_predictors_file = 'data/data_kmeans_rf_train_002.memmap'
-    test_predictors_file = 'data/data_kmeans_rf_test_002.memmap'
-    memmap_predictors = True
+    train_predictors_file = 'data/data_kmeans_rf_train_002.npy'
+    test_predictors_file = 'data/data_kmeans_rf_test_002.npy'
     estimator_defaults = {
         'n_estimators': 250,
         'random_state': 0,
