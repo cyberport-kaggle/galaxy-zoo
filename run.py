@@ -247,14 +247,23 @@ def kmeans_002():
 
     n_jobs = multiprocessing.cpu_count()
 
-    if not os.path.exists('mdl_kmeans_002_centroids.npy'):
+    if not os.path.exists('data/mdl_kmeans_002_centroids.npy'):
+        logger.info("Pretraining KMeans feature encoder")
         km = models.KMeansFeatures.KMeansFeatures(rf_size=5, num_centroids=1600, num_patches=400000)
         km.fit(trainX)
         km.save_to_file('mdl_kmeans_002')
     else:
+        logger.info("Loading KMeans feature encoder from file")
         km = models.KMeansFeatures.KMeansFeatures.load_from_file('mdl_kmeans_002', rf_size=5)
 
     mdl = models.RandomForest.KMeansRandomForest(km, trainX, testX, n_jobs=n_jobs, cv_sample=0.5)
+    # mdl.run('cv')
+    mdl.run('train')
+    res = mdl.run('predict')
+    np.save('sub_kmeans_rf_002.npy', res)
+    output = classes.Submission(res)
+    output.to_file('sub_kmeans_rf_002.csv')
+
 
 
 
