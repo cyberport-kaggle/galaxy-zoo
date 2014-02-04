@@ -223,6 +223,11 @@ def kmeans_002():
     train_mmap_path = 'data/train_cropped_150_scale_15.memmap'
     test_mmap_path = 'data/test_cropped_150_scale_15.memmap'
 
+    if not os.path.exists('data/train_cropped_150.memmap'):
+        classes.crop_to_memmap(150, training=True)
+    if not os.path.exists('data/test_cropped_150.memmap'):
+        classes.crop_to_memmap(150, training=False)
+
     if not os.path.exists(train_mmap_path):
         logger.info("Prepping training images")
         pre_scale = np.memmap('data/train_cropped_150.memmap', mode='r', shape=(N_TRAIN, 150, 150, 3))
