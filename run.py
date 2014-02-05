@@ -132,6 +132,8 @@ def ridge_rf_001(outfile='sub_ridge_rf_001.csv'):
     sub = classes.Submission(mdl.test_y)
     sub.to_file(outfile)
 
+    # Testing this with new models
+
 
 def svr_rf():
     # subsample

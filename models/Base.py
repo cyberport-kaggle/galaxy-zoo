@@ -633,3 +633,116 @@ class CropScaleImageTransformer(BaseEstimator, TransformerMixin):
 
 def _parallel_crop_scale(transformer, file_list):
     return transformer._transform(file_list)
+
+
+class ModelWrapper(object):
+    """
+    BaseModel was too complicated, so this is just a simple wrapper around an estimator and a data source
+    """
+    def __init__(self, estimator_class, estimator_defaults=None, n_jobs=1):
+        self.estimator_class = estimator_class
+        self.estimator_defaults = estimator_defaults
+        self.n_jobs = n_jobs
+
+    def get_estimator(self, **kwargs):
+        params = self.estimator_defaults.copy()
+        params.update(**kwargs)
+        return self.estimator_class(**params)
+
+    def grid_search(self, X, y, grid_search_params, grid_search_class=None, sample=None):
+        cls = grid_search_class or grid_search.GridSearchCV
+        logger.info("Performing grid search")
+        start_time = time.time()
+        params = {
+            'scoring': rmse_scorer,
+            'verbose': 3,
+            'refit':  True,
+            'n_jobs': self.n_jobs,
+            'cv': 2
+        }
+        estimator = self.get_estimator()
+
+        if 'n_jobs' in estimator.get_params().keys():
+                estimator.set_params(n_jobs=1)
+
+        self.grid_search_estimator = cls(estimator, grid_search_params, **params)
+
+        if sample is not None:
+            logger.info("Using {} of the train set for grid search".format(self.grid_search_sample))
+            # Downsample if a sampling rate is defined
+            self.grid_search_x, \
+            self.grid_search_x_test, \
+            self.grid_search_y, \
+            self.grid_search_y_test = cross_validation.train_test_split(X,
+                                                                        y,
+                                                                        train_size=self.grid_search_sample)
+        else:
+            logger.info("Using full train set for the grid search")
+            # Otherwise use the full set
+            self.grid_search_x = self.grid_search_x_test = X
+            self.grid_search_y = self.grid_search_y_test = y
+
+        self.grid_search_estimator.fit(self.grid_search_x, self.grid_search_y)
+        logger.info("Found best parameters:")
+        logger.info(self.grid_search_estimator.best_params_)
+
+        if params['refit']:
+            logger.info("Predicting on holdout set")
+            pred = self.grid_search_estimator.predict(self.grid_search_x_test)
+            res = rmse(self.grid_search_y_test, pred)
+            logger.info("RMSE on holdout set: {}".format(res))
+
+        logger.info("Grid search completed in {}".format(time.time() - start_time))
+
+    def cross_validation(self, X, y, n_folds=2, cv_class=None, sample=None):
+        cls = cv_class or cross_validation.KFold
+
+        start_time = time.time()
+        if sample is not None:
+            logger.info("Performing {}-fold cross validation with {:.0%} of the sample".format(self.cv_folds, sample))
+            self.cv_x,\
+            self.cv_x_test,\
+            self.cv_y,\
+            self.cv_y_test = cross_validation.train_test_split(X, y, train_size=sample)
+        else:
+            logger.info("Performing {}-fold cross validation with full training set".format(self.cv_folds))
+            self.cv_x = X
+            self.cv_y = y
+        self.cv_iterator = cls(self.cv_x.shape[0], n_folds=n_folds)
+
+        params = {
+            'cv': self.cv_iterator,
+            'scoring': rmse_scorer,
+            'verbose': 3,
+            'n_jobs': self.n_jobs
+        }
+
+        estimator = self.get_estimator()
+        # Make sure to not parallelize the estimator
+        if 'n_jobs' in estimator.get_params().keys():
+            estimator.set_params(n_jobs=1)
+
+        self.cv_scores = cross_validation.cross_val_score(estimator, self.cv_x, self.cv_y, **params)
+        logger.info("Cross validation completed in {}.  Scores:".format(time.time() - start_time))
+        logger.info("{}".format(self.cv_scores))
+
+    def fit(self, X, y=None):
+        start_time = time.time()
+        logger.info("Fitting estimator")
+        self.estimator_ = self.get_estimator()
+        if 'n_jobs' in self.estimator_.get_params().keys():
+            self.estimator_.set_params(n_jobs=self.n_jobs)
+
+        self.estimator_.fit(X, y)
+        logger.info("Finished fitting model in {}".format(time.time() - start_time))
+
+        # Get an in sample RMSE
+        logger.info("Calculating in-sample RMSE")
+        self.training_predict = self.estimator_.predict(X)
+        self.rmse = rmse(self.training_predict, y)
+
+    def predict(self, X):
+        if not hasattr(self, 'estimator_'):
+            raise RuntimeError("Estimator has not been trained")
+
+        return self.estimator_.predict(X)
