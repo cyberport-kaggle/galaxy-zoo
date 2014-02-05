@@ -7,6 +7,8 @@ from matplotlib import pyplot
 import numpy as np
 from numpy.lib.stride_tricks import as_strided
 import logging
+from sklearn.base import BaseEstimator, TransformerMixin
+from classes import chunks
 from constants import *
 
 logger = logging.getLogger('galaxy')
@@ -487,75 +489,28 @@ def _process_batches(X, start, end, batch_size, centroids, c2, x2, k):
     return summation, counts, loss
 
 
-"""
-from cifar import *
-import ipdb
+class PatchExtractorTransformer(BaseEstimator, TransformerMixin):
+    """
+    Given an input ndarray of images, extract patches from the ndarray
 
-data = [get_batch(i)['data'] for i in range(1, 6)]
-data = np.vstack(data)
-rdata = data.reshape((50000, 3, 32, 32))
-rdata = rdata.swapaxes(1, 3)
-rdata = rdata.swapaxes(1, 2)
+    Expects input ndarray to be of shape (n, x, y, chan)
 
-mdl = models.KMeansFeatures.KMeansFeatures(rf_size=6, num_centroids=1600, num_patches=400000)
-mdl.trainX = rdata
-mdl.extract_patches()
-mdl.patches = models.KMeansFeatures.normalize(mdl.patches)
-mdl.whiten()
+    Not cached to file
+    """
+    def __init__(self, n_patches, patch_size, n_jobs=1, verbose=3):
+        self.n_patches = n_patches
+        self.patch_size = patch_size
+        self.verbose = verbose
+        self.n_jobs = (multiprocessing.cpu_count() + n_jobs + 1) if n_jobs <= -1 else n_jobs
 
-# ipdb.run('models.KMeansFeatures.spherical_kmeans(mdl.patches, 1600, 50)')
+    def fit(self, X=None, y=None):
+        return self
 
-centroids = models.KMeansFeatures.spherical_kmeans(mdl.patches, 1600, 10)
-
-K-means iteration 1 / 50, loss 7929682.156621
-K-means iteration 2 / 50, loss 6360819.903194
-K-means iteration 3 / 50, loss 5845735.334416
-K-means iteration 4 / 50, loss 5662207.157659
-K-means iteration 5 / 50, loss 5576102.374176
-K-means iteration 6 / 50, loss 5527709.879265
-K-means iteration 7 / 50, loss 5497342.736403
-K-means iteration 8 / 50, loss 5476660.157031
-K-means iteration 9 / 50, loss 5461946.867995
-K-means iteration 10 / 50, loss 5450773.459769
-K-means iteration 11 / 50, loss 5441964.667322
-K-means iteration 12 / 50, loss 5434968.280210
-K-means iteration 13 / 50, loss 5429328.339294
-K-means iteration 14 / 50, loss 5424500.268900
-K-means iteration 15 / 50, loss 5420282.964752
-K-means iteration 16 / 50, loss 5416694.390692
-K-means iteration 17 / 50, loss 5413672.757183
-K-means iteration 18 / 50, loss 5411071.651387
-K-means iteration 19 / 50, loss 5408777.344397
-K-means iteration 20 / 50, loss 5406771.207412
-K-means iteration 21 / 50, loss 5404987.410941
-K-means iteration 22 / 50, loss 5403393.323705
-K-means iteration 23 / 50, loss 5401991.038828
-K-means iteration 24 / 50, loss 5400678.657783
-K-means iteration 25 / 50, loss 5399466.917830
-K-means iteration 26 / 50, loss 5398354.264769
-K-means iteration 27 / 50, loss 5397318.404619
-K-means iteration 28 / 50, loss 5396398.170130
-K-means iteration 29 / 50, loss 5395568.792654
-K-means iteration 30 / 50, loss 5394815.573593
-K-means iteration 31 / 50, loss 5394129.751249
-K-means iteration 32 / 50, loss 5393487.839848
-K-means iteration 33 / 50, loss 5392907.159336
-K-means iteration 34 / 50, loss 5392365.621484
-K-means iteration 35 / 50, loss 5391848.820510
-K-means iteration 36 / 50, loss 5391386.130618
-K-means iteration 37 / 50, loss 5390965.156332
-K-means iteration 38 / 50, loss 5390565.283935
-K-means iteration 39 / 50, loss 5390192.369274
-K-means iteration 40 / 50, loss 5389848.162731
-K-means iteration 41 / 50, loss 5389510.443807
-K-means iteration 42 / 50, loss 5389206.547821
-K-means iteration 43 / 50, loss 5388940.929436
-K-means iteration 44 / 50, loss 5388683.464927
-K-means iteration 45 / 50, loss 5388430.057730
-K-means iteration 46 / 50, loss 5388187.639730
-K-means iteration 47 / 50, loss 5387962.393151
-K-means iteration 48 / 50, loss 5387738.482807
-K-means iteration 49 / 50, loss 5387525.722404
-K-means iteration 50 / 50, loss 5387330.119329
-
-"""
+    def transform(self, X):
+        all_rows = range(X.shape[0])
+        chunked_rows = list(chunks(all_rows, self.n_jobs))
+        logger.info("Extracting {} patches of size {} in {} jobs, chunk sizes: {}".format(self.n_patches, self.patch_size, self.n_jobs, [len(x) for x in chunked_rows]))
+        res = Parallel(n_jobs=self.n_jobs, verbose=self.verbose)(
+            delayed(chunked_extract_patch)(rows, X, self.patch_size) for rows in chunked_rows
+        )
+        return np.vstack(res)
