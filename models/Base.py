@@ -649,14 +649,14 @@ class ModelWrapper(object):
         params.update(**kwargs)
         return self.estimator_class(**params)
 
-    def grid_search(self, X, y, grid_search_params, grid_search_class=None, sample=None):
+    def grid_search(self, X, y, grid_search_params, grid_search_class=None, sample=None, refit=True):
         cls = grid_search_class or grid_search.GridSearchCV
         logger.info("Performing grid search")
         start_time = time.time()
         params = {
             'scoring': rmse_scorer,
             'verbose': 3,
-            'refit':  True,
+            'refit':  refit,
             'n_jobs': self.n_jobs,
             'cv': 2
         }
@@ -668,14 +668,14 @@ class ModelWrapper(object):
         self.grid_search_estimator = cls(estimator, grid_search_params, **params)
 
         if sample is not None:
-            logger.info("Using {} of the train set for grid search".format(self.grid_search_sample))
+            logger.info("Using {} of the train set for grid search".format(sample))
             # Downsample if a sampling rate is defined
             self.grid_search_x, \
             self.grid_search_x_test, \
             self.grid_search_y, \
             self.grid_search_y_test = cross_validation.train_test_split(X,
                                                                         y,
-                                                                        train_size=self.grid_search_sample)
+                                                                        train_size=sample)
         else:
             logger.info("Using full train set for the grid search")
             # Otherwise use the full set
@@ -685,6 +685,8 @@ class ModelWrapper(object):
         self.grid_search_estimator.fit(self.grid_search_x, self.grid_search_y)
         logger.info("Found best parameters:")
         logger.info(self.grid_search_estimator.best_params_)
+        logger.info("All results:")
+        logger.inf(self.grid_search_estimator.grid_scores_)
 
         if params['refit']:
             logger.info("Predicting on holdout set")
@@ -699,13 +701,13 @@ class ModelWrapper(object):
 
         start_time = time.time()
         if sample is not None:
-            logger.info("Performing {}-fold cross validation with {:.0%} of the sample".format(self.cv_folds, sample))
+            logger.info("Performing {}-fold cross validation with {:.0%} of the sample".format(n_folds, sample))
             self.cv_x,\
             self.cv_x_test,\
             self.cv_y,\
             self.cv_y_test = cross_validation.train_test_split(X, y, train_size=sample)
         else:
-            logger.info("Performing {}-fold cross validation with full training set".format(self.cv_folds))
+            logger.info("Performing {}-fold cross validation with full training set".format(n_folds))
             self.cv_x = X
             self.cv_y = y
         self.cv_iterator = cls(self.cv_x.shape[0], n_folds=n_folds)

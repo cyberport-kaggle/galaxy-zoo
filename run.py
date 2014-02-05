@@ -133,6 +133,25 @@ def ridge_rf_001(outfile='sub_ridge_rf_001.csv'):
     sub.to_file(outfile)
 
     # Testing this with new models
+    train_predictors_file = 'data/data_ridge_rf_train_001.npy'
+    test_predictors_file = 'data/data_ridge_rf_test_001.npy'
+    train_x = np.load(train_predictors_file)
+    train_y = classes.train_solutions.data
+    mdl = models.Base.ModelWrapper(models.Ridge.RidgeRFEstimator, {
+        'alpha': 14,
+        'n_estimators': 10,
+        'verbose': 3,
+        'oob_score': True
+    }, n_jobs=-1)
+    mdl.cross_validation(train_x, train_y, sample=0.1)
+    mdl.grid_search(train_x, train_y, {
+        'alpha': [1, 5, 10],
+        'n_estimators': [10, 20]
+    }, sample=0.1)
+
+    test_x = np.load(test_predictors_file)
+    mdl.fit(train_x, train_y)
+    pred = mdl.predict(test_x)
 
 
 def svr_rf():
@@ -279,6 +298,31 @@ def kmeans_002():
     np.save('submissions/sub_kmeans_rf_002.npy', res)
     output = classes.Submission(res)
     output.to_file('sub_kmeans_rf_002.csv')
+
+
+def kmeans_002_new():
+    """
+    Trying to replicate kmeans_002 with the new transformers and pipeline
+    """
+    train_x_crop_scale = models.Base.CropScaleImageTransformer(training=True,
+                                                               result_path='data/data_train_crop_150_scale_15.npy',
+                                                               crop_size=150,
+                                                               scaled_size=15,
+                                                               n_jobs=-1)
+    patch_extractor = models.KMeansFeatures.PatchSampler(n_patches=10000,
+                                                         patch_size=5,
+                                                         n_jobs=-1)
+    images = train_x_crop_scale.transform()
+    patches = patch_extractor.transform(images)
+
+    kmeans_generator = models.KMeansFeatures.KMeansFeatureGenerator(n_centroids=1600,
+                                                                    rf_size=5,
+                                                                    result_path='data/mdl_kmeans_002_new',
+                                                                    n_iterations=20,
+                                                                    n_jobs=-1)
+    kmeans_generator.fit(patches)
+    train_x = kmeans_generator.transform(images)
+    mdl = models.Ridge.RidgeRFEstimator(alpha=14, n_estimators=250, n_jobs=-1)
 
 
 def kmeans_centroids(fit_centroids=False):

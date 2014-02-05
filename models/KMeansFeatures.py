@@ -2,6 +2,7 @@ from __future__ import division
 import multiprocessing
 import itertools
 import math
+import os
 from joblib import Parallel, delayed
 from matplotlib import pyplot
 import numpy as np
@@ -515,9 +516,11 @@ class PatchSampler(BaseEstimator, TransformerMixin):
 
 
 class KMeansFeatureGenerator(BaseEstimator, TransformerMixin):
-    def __init__(self, n_centroids, n_iterations, n_init, n_jobs=1, verbose=3):
+    def __init__(self, n_centroids, rf_size, result_path, n_iterations=20, n_init=None, n_jobs=1, verbose=3, force_rerun=False):
         self.n_centroids = n_centroids
+        self.rf_size = rf_size
         self.n_iterations = n_iterations
+        self.result_path = result_path
         self.n_init = n_init
         self.n_jobs = n_jobs
         self.verbose = verbose
@@ -533,59 +536,60 @@ class KMeansFeatureGenerator(BaseEstimator, TransformerMixin):
         return res, mean, p
 
     def fit(self, X, y=None):
-        logger.info("Whitening")
-        res, self.mean_, self.p_ = self.whiten(X)
-        logger.info("Clustering")
-        self.centroids_ = spherical_kmeans(X, self.n_centroids, self.n_iterations)
+        if os.path.exists(self.result_path) and not self.force_rerun:
+            self.load_from_file()
+        else:
+            logger.info("Whitening")
+            res, self.mean_, self.p_ = self.whiten(X)
+            logger.info("Clustering")
+            self.centroids_ = spherical_kmeans(X, self.n_centroids, self.n_iterations)
+            self.save_to_file()
         return self
 
-    def transform(self, X, rf_size):
+    def transform(self, X):
         """
         Expects X to be in the shape of (n, x, y, chan)
         """
+        if not hasattr(self, 'centroids_'):
+            raise RuntimeError("Model has not been fitted")
+
         all_rows = range(X.shape[0])
         chunked_rows = list(chunks(all_rows, self.n_jobs))
         logger.info("Transforming in {} jobs, chunk sizes: {}".format(self.n_jobs, [len(x) for x in chunked_rows]))
         res = Parallel(n_jobs=self.n_jobs, verbose=self.verbose)(
-            delayed(chunked_extract_features)(i, X, rf_size, self.centroids_, self.mean_, self.p_, True) for i in chunked_rows
+            delayed(chunked_extract_features)(i, X, self.rf_size, self.centroids_, self.mean_, self.p_, True) for i in chunked_rows
         )
         res = np.vstack(res)
         return res
 
-    def save_to_file(self, file_base):
+    def save_to_file(self):
         """
         Saves the patch size, centroids, mean, and p to files for reloading.  Assumes whitening is always true
         """
-        file_path = './data/' + file_base
-        centroids_path = file_path + '_centroids.npy'
+        centroids_path = self.result_path + '_centroids.npy'
         logger.info('Saving centroids to {}'.format(centroids_path))
         np.save(centroids_path, self.centroids_)
 
-        means_path = file_path + '_means.npy'
+        means_path = self.result_path + '_means.npy'
         logger.info("Saving means to {}".format(means_path))
         np.save(means_path, self.mean_)
 
-        p_path = file_path + '_p.npy'
+        p_path = self.result_path + '_p.npy'
         logger.info("Saving p to {}".format(p_path))
         np.save(p_path, self.p_)
 
-    @classmethod
-    def load_from_file(cls, file_base, rf_size=6):
+    def load_from_file(self):
         """
         loads in patch size, centroids, mean, and p
         """
-        instance = cls(rf_size=rf_size, whitening=True)
-        file_path = './data/' + file_base
-        centroids_path = file_path + '_centroids.npy'
+        centroids_path = self.result_path + '_centroids.npy'
         logger.info('Loading centroids from {}'.format(centroids_path))
-        instance.centroids_ = np.load(centroids_path)
+        self.centroids_ = np.load(centroids_path)
 
-        means_path = file_path + '_means.npy'
+        means_path = self.result_path + '_means.npy'
         logger.info("Loading means from {}".format(means_path))
-        instance.mean_ = np.load(means_path)
+        self.mean_ = np.load(means_path)
 
-        p_path = file_path + '_p.npy'
+        p_path = self.result_path + '_p.npy'
         logger.info("Loading p from {}".format(p_path))
-        instance.p_ = np.load(p_path)
-        return instance
-
+        self.p_ = np.load(p_path)
