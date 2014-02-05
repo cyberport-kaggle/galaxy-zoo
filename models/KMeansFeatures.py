@@ -3,6 +3,7 @@ import multiprocessing
 import itertools
 import math
 import os
+import tempfile
 from joblib import Parallel, delayed
 from matplotlib import pyplot
 import numpy as np
@@ -416,6 +417,10 @@ def parallel_spherical_kmeans(X, k, n_iter, batch_size=1000):
     # randomly initialize centroids
     centroids = np.random.randn(k, X.shape[1]) * 0.1
 
+    # dump the shared files to memmap before looping, so that the file is not dumped every single time
+    temp_folder = tempfile.mkdtemp()
+    memmap_path = os.path.join(temp_folder, 'kmeans_tmp.memmap')
+
     for iteration in xrange(1, n_iter + 1):
         # shape (k, 1)
         c2 = 0.5 * np.sum(centroids ** 2, 1, keepdims=True)
@@ -532,17 +537,19 @@ class KMeansFeatureGenerator(BaseEstimator, TransformerMixin):
         p = np.dot(v,
                    np.dot(np.diag(np.sqrt(1 / (d + 0.1))),
                           v.T))
-        res = np.dot(self.patches - mean, p)
+        res = np.dot(X - mean, p)
         return res, mean, p
 
     def fit(self, X, y=None):
         if os.path.exists(self.result_path) and not self.force_rerun:
             self.load_from_file()
         else:
+            logger.info("Normalizing")
+            norm_x = normalize(X)
             logger.info("Whitening")
-            res, self.mean_, self.p_ = self.whiten(X)
+            res, self.mean_, self.p_ = self.whiten(norm_x)
             logger.info("Clustering")
-            self.centroids_ = spherical_kmeans(X, self.n_centroids, self.n_iterations)
+            self.centroids_ = spherical_kmeans(res, self.n_centroids, self.n_iterations)
             self.save_to_file()
         return self
 
