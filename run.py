@@ -219,6 +219,16 @@ def kmeans_002():
 
     The centroids don't look like anything (splotches of color against mostly gray), but the CV score on 10000 samples and 20 trees
     was .128, which is quite promising.
+
+    Training the kmeans then using RidgeRFEstimator got us to .107 on the leaderboard
+
+    Broadly speaking, the pipe looks like this:
+
+    Encoder:
+    CropScaleImageTransformer -> PatchExtractorTransformer -> KMeansFeatureGenerator.fit
+
+    Model:
+    CropSCaleImageTransformer -> KMeansFeatureGenerator.transform -> RidgeRFEstimator
     """
     train_mmap_path = 'data/train_cropped_150_scale_15.memmap'
     test_mmap_path = 'data/test_cropped_150_scale_15.memmap'

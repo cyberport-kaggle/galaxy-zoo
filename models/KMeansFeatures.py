@@ -302,8 +302,6 @@ def chunked_extract_features(idx, X, rf_size, centroids, mean, p, whitening=True
         mu = z.mean(1, keepdims=True)
         patches = np.maximum(mu - z, 0)
 
-        # 150 is hard coded in the crop size, which is actually pre-determined by classes.crop_image_to_mmap
-        # So don't need to reference the attribute here
         prows = this_x.shape[0] - rf_size + 1
         pcols = this_x.shape[0] - rf_size + 1
         num_centroids = centroids.shape[0]
@@ -408,7 +406,7 @@ def parallel_spherical_kmeans(X, k, n_iter, batch_size=1000):
     spherical kmeans in parallel.  Unfortunately not that much faster.  Non-parallel takes about
     a minute per iteration on my machine, and this takes 40 seconds per iteration.
 
-    Probably because of the overhead involved in threading things out.
+    Probably because of the overhead involved in threading things out.  Should try dumping the X to an memmap first
     """
 
     # shape (k, 1)
@@ -489,7 +487,7 @@ def _process_batches(X, start, end, batch_size, centroids, c2, x2, k):
     return summation, counts, loss
 
 
-class PatchExtractorTransformer(BaseEstimator, TransformerMixin):
+class PatchSampler(BaseEstimator, TransformerMixin):
     """
     Given an input ndarray of images, extract patches from the ndarray
 
@@ -553,3 +551,41 @@ class KMeansFeatureGenerator(BaseEstimator, TransformerMixin):
         )
         res = np.vstack(res)
         return res
+
+    def save_to_file(self, file_base):
+        """
+        Saves the patch size, centroids, mean, and p to files for reloading.  Assumes whitening is always true
+        """
+        file_path = './data/' + file_base
+        centroids_path = file_path + '_centroids.npy'
+        logger.info('Saving centroids to {}'.format(centroids_path))
+        np.save(centroids_path, self.centroids_)
+
+        means_path = file_path + '_means.npy'
+        logger.info("Saving means to {}".format(means_path))
+        np.save(means_path, self.mean_)
+
+        p_path = file_path + '_p.npy'
+        logger.info("Saving p to {}".format(p_path))
+        np.save(p_path, self.p_)
+
+    @classmethod
+    def load_from_file(cls, file_base, rf_size=6):
+        """
+        loads in patch size, centroids, mean, and p
+        """
+        instance = cls(rf_size=rf_size, whitening=True)
+        file_path = './data/' + file_base
+        centroids_path = file_path + '_centroids.npy'
+        logger.info('Loading centroids from {}'.format(centroids_path))
+        instance.centroids_ = np.load(centroids_path)
+
+        means_path = file_path + '_means.npy'
+        logger.info("Loading means from {}".format(means_path))
+        instance.mean_ = np.load(means_path)
+
+        p_path = file_path + '_p.npy'
+        logger.info("Loading p from {}".format(p_path))
+        instance.p_ = np.load(p_path)
+        return instance
+
