@@ -7,7 +7,7 @@ from matplotlib import pyplot
 import numpy as np
 from numpy.lib.stride_tricks import as_strided
 import logging
-from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.base import BaseEstimator, TransformerMixin, ClusterMixin
 from classes import chunks
 from constants import *
 
@@ -514,3 +514,42 @@ class PatchExtractorTransformer(BaseEstimator, TransformerMixin):
             delayed(chunked_extract_patch)(rows, X, self.patch_size) for rows in chunked_rows
         )
         return np.vstack(res)
+
+
+class KMeansFeatureGenerator(BaseEstimator, TransformerMixin):
+    def __init__(self, n_centroids, n_iterations, n_init, n_jobs=1, verbose=3):
+        self.n_centroids = n_centroids
+        self.n_iterations = n_iterations
+        self.n_init = n_init
+        self.n_jobs = n_jobs
+        self.verbose = verbose
+
+    def whiten(self, X):
+        cov = np.cov(X, rowvar=0)
+        mean = X.mean(0, keepdims=True)
+        d, v = np.linalg.eig(cov)
+        p = np.dot(v,
+                   np.dot(np.diag(np.sqrt(1 / (d + 0.1))),
+                          v.T))
+        res = np.dot(self.patches - mean, p)
+        return res, mean, p
+
+    def fit(self, X, y=None):
+        logger.info("Whitening")
+        res, self.mean_, self.p_ = self.whiten(X)
+        logger.info("Clustering")
+        self.centroids_ = spherical_kmeans(X, self.n_centroids, self.n_iterations)
+        return self
+
+    def transform(self, X, rf_size):
+        """
+        Expects X to be in the shape of (n, x, y, chan)
+        """
+        all_rows = range(X.shape[0])
+        chunked_rows = list(chunks(all_rows, self.n_jobs))
+        logger.info("Transforming in {} jobs, chunk sizes: {}".format(self.n_jobs, [len(x) for x in chunked_rows]))
+        res = Parallel(n_jobs=self.n_jobs, verbose=self.verbose)(
+            delayed(chunked_extract_features)(i, X, rf_size, self.centroids_, self.mean_, self.p_, True) for i in chunked_rows
+        )
+        res = np.vstack(res)
+        return res
