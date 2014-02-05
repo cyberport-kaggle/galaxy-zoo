@@ -5,6 +5,7 @@ import math
 import os
 import tempfile
 from joblib import Parallel, delayed
+import joblib
 from matplotlib import pyplot
 import numpy as np
 from numpy.lib.stride_tricks import as_strided
@@ -352,7 +353,7 @@ def spherical_kmeans(X, k, n_iter, batch_size=1000):
     Returns a (k, n_pixels) centroids matrix
     """
 
-    # shape (k, 1)
+    # shape (n_samples, 1)
     x2 = np.sum(X**2, 1, keepdims=True)
 
     # randomly initialize centroids
@@ -403,7 +404,7 @@ def spherical_kmeans(X, k, n_iter, batch_size=1000):
     return centroids
 
 
-def parallel_spherical_kmeans(X, k, n_iter, batch_size=1000):
+def parallel_spherical_kmeans(X, k, n_iter, batch_size=1000, n_jobs=1):
     """
     spherical kmeans in parallel.  Unfortunately not that much faster.  Non-parallel takes about
     a minute per iteration on my machine, and this takes 40 seconds per iteration.
@@ -411,7 +412,7 @@ def parallel_spherical_kmeans(X, k, n_iter, batch_size=1000):
     Probably because of the overhead involved in threading things out.  Should try dumping the X to an memmap first
     """
 
-    # shape (k, 1)
+    # shape (n_samples, 1)
     x2 = np.sum(X**2, 1, keepdims=True)
 
     # randomly initialize centroids
@@ -420,6 +421,19 @@ def parallel_spherical_kmeans(X, k, n_iter, batch_size=1000):
     # dump the shared files to memmap before looping, so that the file is not dumped every single time
     temp_folder = tempfile.mkdtemp()
     memmap_path = os.path.join(temp_folder, 'kmeans_tmp.memmap')
+    if os.path.exists(memmap_path):
+        os.unlink(memmap_path)
+    _ = joblib.dump(X, memmap_path)
+    X_memmap = joblib.load(memmap_path, mmap_mode='r+')
+
+    # Parallelizes by splitting X's rows into groups
+    # Each subprocess gets a group, and traverses that group in batches
+    cores = n_jobs
+    chunk_size = int(math.floor(X.shape[0] / cores))
+    ranges = [(0 + (i * chunk_size), 0 + ((i + 1) * chunk_size)) for i in range(cores)]
+    # Any remainders get attached to the last chunk
+    ranges[-1] = (ranges[-1][0], X.shape[0])
+    logger.info("Chunked with offsets {} and chunk size {}".format(ranges, chunk_size))
 
     for iteration in xrange(1, n_iter + 1):
         # shape (k, 1)
@@ -430,18 +444,9 @@ def parallel_spherical_kmeans(X, k, n_iter, batch_size=1000):
         counts = np.zeros((k, 1))
         loss = 0
 
-        # Parallelizes by splitting X's rows into groups
-        # Each subprocess gets a group, and traverses that group in batches
-        cores = multiprocessing.cpu_count()
-        chunk_size = int(math.floor(X.shape[0] / cores))
-        ranges = [(0 + (i * chunk_size), 0 + ((i + 1) * chunk_size)) for i in range(cores)]
-        # Any remainders get attached to the last chunk
-        ranges[-1] = (ranges[-1][0], X.shape[0])
-
-        logger.info("Chunked with offsets {} and chunk size {}".format(ranges, chunk_size))
         # Gets back an array of (summation, counts, loss) tuples
         res = Parallel(n_jobs=cores, verbose=3)(
-            delayed(_process_batches)(X, start, end, batch_size, centroids, c2, x2, k) for start, end in ranges
+            delayed(_process_batches)(X_memmap, start, end, batch_size, centroids, c2, x2, k) for start, end in ranges
         )
 
         for this_sum, this_count, this_loss in res:
@@ -458,6 +463,13 @@ def parallel_spherical_kmeans(X, k, n_iter, batch_size=1000):
         assert not np.any(np.isnan(centroids))
 
         logger.info("K-means iteration {} of {}, loss {}".format(iteration, n_iter, loss))
+
+    # Clean up memmap folder
+    try:
+        shutil.rmtree(temp_folder)
+    except:
+        pass  # Sometimes fails in windows
+
     return centroids
 
 
@@ -511,8 +523,8 @@ class PatchSampler(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X):
-        all_rows = range(X.shape[0])
-        chunked_rows = list(chunks(all_rows, self.n_jobs))
+        patch_rng = range(self.n_patches)
+        chunked_rows = list(chunks(patch_rng, self.n_jobs))
         logger.info("Extracting {} patches of size {} in {} jobs, chunk sizes: {}".format(self.n_patches, self.patch_size, self.n_jobs, [len(x) for x in chunked_rows]))
         res = Parallel(n_jobs=self.n_jobs, verbose=self.verbose)(
             delayed(chunked_extract_patch)(rows, X, self.patch_size) for rows in chunked_rows
@@ -527,8 +539,9 @@ class KMeansFeatureGenerator(BaseEstimator, TransformerMixin):
         self.n_iterations = n_iterations
         self.result_path = result_path
         self.n_init = n_init
-        self.n_jobs = n_jobs
+        self.n_jobs = (multiprocessing.cpu_count() + n_jobs + 1) if n_jobs <= -1 else n_jobs
         self.verbose = verbose
+        self.force_rerun = force_rerun
 
     def whiten(self, X):
         cov = np.cov(X, rowvar=0)
@@ -549,7 +562,8 @@ class KMeansFeatureGenerator(BaseEstimator, TransformerMixin):
             logger.info("Whitening")
             res, self.mean_, self.p_ = self.whiten(norm_x)
             logger.info("Clustering")
-            self.centroids_ = spherical_kmeans(res, self.n_centroids, self.n_iterations)
+            # self.centroids_ = spherical_kmeans(res, self.n_centroids, self.n_iterations)
+            self.centroids_ = parallel_spherical_kmeans(res, self.n_centroids, self.n_iterations, n_jobs=self.n_jobs)
             self.save_to_file()
         return self
 

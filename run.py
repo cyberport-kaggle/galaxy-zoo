@@ -309,11 +309,10 @@ def kmeans_002_new():
                                                                crop_size=150,
                                                                scaled_size=15,
                                                                n_jobs=-1)
-    patch_extractor = models.KMeansFeatures.PatchSampler(n_patches=10000,
+    patch_extractor = models.KMeansFeatures.PatchSampler(n_patches=400000,
                                                          patch_size=5,
                                                          n_jobs=-1)
     images = train_x_crop_scale.transform()
-    # Bug here, patches should be (n, x, y, chan), but is instead (n, x * y * chan)
     patches = patch_extractor.transform(images)
 
     kmeans_generator = models.KMeansFeatures.KMeansFeatureGenerator(n_centroids=1600,
