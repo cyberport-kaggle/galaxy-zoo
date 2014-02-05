@@ -5,6 +5,7 @@ Classes for Galaxy Zoo
 from __future__ import division
 from functools import wraps
 import os
+import math
 
 from scipy import misc
 import numpy as np
@@ -369,3 +370,12 @@ class RawImage(object):
     def average_intensity(self):
         return self.data.mean()
 
+
+def chunks(l, n):
+    """
+    Yield n chunks from l.
+    """
+    chunk_size = int(math.ceil(len(l)/ n))
+
+    for i in xrange(0, len(l), chunk_size):
+        yield l[i:i+chunk_size]

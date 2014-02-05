@@ -1,6 +1,10 @@
+from __future__ import division
+import multiprocessing
 import time
+from joblib import Parallel, delayed
 from sklearn import grid_search, cross_validation, clone
-from classes import train_solutions, RawImage, logger, rmse_scorer, rmse
+from sklearn.base import BaseEstimator, TransformerMixin
+from classes import train_solutions, RawImage, logger, rmse_scorer, rmse, chunks
 from constants import *
 import numpy as np
 import os
@@ -567,3 +571,65 @@ class CascadeModel(BaseModel):
         self.test_y = self.estimator.predict(self.test_x)
         return self.test_y
         """
+
+
+class CropScaleImageTransformer(BaseEstimator, TransformerMixin):
+    """
+    Processes the training or test JPGs by cropping then scaling.  Saves the resulting ndarray to a file.  If the file exists when transform() is run
+    Then it loads the results from the file instead of running again.
+
+    Executes crop first, then scale
+
+    Arguments:
+    ----------
+    crop_size: integer
+        Pixel length to which to crop
+
+    scaled_size: integer
+        Pixel lenggh to scale
+    """
+    def __init__(self, training, result_path, crop_size, scaled_size, n_jobs=1, force_rerun=False, verbose=3):
+        self.training = training
+        self.result_path = result_path
+        self.crop_size = crop_size
+        self.scaled_size = scaled_size
+        self.verbose = verbose
+        self.n_jobs = (multiprocessing.cpu_count() + n_jobs + 1) if n_jobs <= -1 else n_jobs
+        self.force_rerun = force_rerun
+
+    def fit(self, X=None, y=None):
+        return self
+
+    def _transform(self, file_list):
+        filepath = TRAIN_IMAGE_PATH if self.training else TEST_IMAGE_PATH
+        out = np.zeros((len(file_list), self.scaled_size, self.scaled_size, 3))
+        factor = self.scaled_size / self.crop_size
+
+        for i, f in enumerate(file_list):
+            if i % 5000 == 0:
+                logger.info("Processing image {} of {}".format(i, len(file_list)))
+            img = RawImage(os.path.join(filepath, f))
+            img.crop(self.crop_size).rescale(factor)
+            out[i] = img.data * 255
+        return out
+
+    def transform(self, X=None):
+        if self.training:
+            files = train_solutions.filenames
+        else:
+            files = sorted(os.listdir(TEST_IMAGE_PATH))
+
+        if os.path.exists(self.result_path) and not self.force_rerun:
+            logger.info("File already exists.  Loading from {}".format(self.result_path))
+            return np.load(self.result_path)
+        else:
+            res = np.vstack(Parallel(n_jobs=self.n_jobs, verbose=self.verbose)(
+                delayed(_parallel_crop_scale)(self, files) for files in chunks(files, self.n_jobs)
+            ))
+            logger.info("Saving results to file {}".format(self.result_path))
+            np.save(self.result_path, res)
+            return res
+
+
+def _parallel_crop_scale(transformer, file_list):
+    return transformer._transform(file_list)
