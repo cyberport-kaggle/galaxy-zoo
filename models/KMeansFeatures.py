@@ -12,6 +12,7 @@ import numpy as np
 from numpy.lib.stride_tricks import as_strided
 import logging
 from sklearn.base import BaseEstimator, TransformerMixin, ClusterMixin
+from sklearn.cluster import MiniBatchKMeans
 from classes import chunks
 from constants import *
 
@@ -534,7 +535,7 @@ class PatchSampler(BaseEstimator, TransformerMixin):
 
 
 class KMeansFeatureGenerator(BaseEstimator, TransformerMixin):
-    def __init__(self, n_centroids, rf_size, result_path, n_iterations=20, n_init=None, n_jobs=1, verbose=3, force_rerun=False):
+    def __init__(self, n_centroids, rf_size, result_path, n_iterations=20, n_init=None, n_jobs=1, verbose=3, force_rerun=False, method='spherical'):
         self.n_centroids = n_centroids
         self.rf_size = rf_size
         self.n_iterations = n_iterations
@@ -543,6 +544,9 @@ class KMeansFeatureGenerator(BaseEstimator, TransformerMixin):
         self.n_jobs = (multiprocessing.cpu_count() + n_jobs + 1) if n_jobs <= -1 else n_jobs
         self.verbose = verbose
         self.force_rerun = force_rerun
+        if method not in ['spherical', 'minibatch']:
+            raise RuntimeError("Method must be spherical or minibatch.  Got {}".format(method))
+        self.method = method
 
     def whiten(self, X):
         cov = np.cov(X, rowvar=0)
@@ -564,7 +568,14 @@ class KMeansFeatureGenerator(BaseEstimator, TransformerMixin):
             res, self.mean_, self.p_ = self.whiten(norm_x)
             logger.info("Clustering")
             # self.centroids_ = spherical_kmeans(res, self.n_centroids, self.n_iterations)
-            self.centroids_ = parallel_spherical_kmeans(res, self.n_centroids, self.n_iterations, n_jobs=self.n_jobs)
+            if self.method == "spherical":
+                self.centroids_ = parallel_spherical_kmeans(res, self.n_centroids, self.n_iterations, n_jobs=self.n_jobs)
+            elif self.method == "minibatch":
+                kmeans = MiniBatchKMeans(n_clusters=self.n_centroids, verbose=True, batch_size=self.n_centroids * 20, compute_labels=False)
+                kmeans.fit(res)
+                self.centroids_ = kmeans.cluster_centers_
+            else:
+                raise RuntimeError("Method must be spherical or minibatch.  Got {}".format(self.method))
             self.save_to_file()
         return self
 

@@ -320,9 +320,11 @@ def kmeans_002_new():
 
     kmeans_generator = models.KMeansFeatures.KMeansFeatureGenerator(n_centroids=1600,
                                                                     rf_size=5,
-                                                                    result_path='data/mdl_kmeans_002_new',
-                                                                    n_iterations=20,
-                                                                    n_jobs=-1)
+                                                                    # result_path='data/mdl_kmeans_002_new',
+                                                                    result_path='data/mdl_kmeans_002_new_minibatch',
+                                                                    method='minibatch',
+                                                                    # n_iterations=20,
+                                                                    n_jobs=-1,)
 
     kmeans_generator.fit(patches)
 
@@ -330,7 +332,8 @@ def kmeans_002_new():
     gc.collect()
 
     # Problematic here - memory usage spikes to ~ 11GB when threads return
-    train_x = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_002_new.npy', memmap=True)
+    # train_x = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_002_new.npy', memmap=True)
+    train_x = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_002_new_minibatch.npy', memmap=True)
     train_y = classes.train_solutions.data
     # Unload some objects
     del images
