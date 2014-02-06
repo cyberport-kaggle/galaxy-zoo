@@ -710,9 +710,10 @@ class ModelWrapper(object):
         if sample is not None:
             logger.info("Performing {}-fold cross validation with {:.0%} of the sample".format(n_folds, sample))
             self.cv_x,\
-            self.cv_x_test,\
+            _,\
             self.cv_y,\
-            self.cv_y_test = cross_validation.train_test_split(X, y, train_size=sample)
+            _ = cross_validation.train_test_split(X, y, train_size=sample)
+            del _
         else:
             logger.info("Performing {}-fold cross validation with full training set".format(n_folds))
             self.cv_x = X

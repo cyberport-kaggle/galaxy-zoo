@@ -5,6 +5,7 @@ import multiprocessing
 import os
 import time
 import gc
+from sklearn import cross_validation
 from sklearn.ensemble import RandomForestRegressor
 
 import classes
@@ -309,7 +310,8 @@ def kmeans_002_new():
                                                                result_path='data/data_train_crop_150_scale_15.npy',
                                                                crop_size=150,
                                                                scaled_size=15,
-                                                               n_jobs=-1)
+                                                               n_jobs=-1,
+                                                               memmap=True)
     patch_extractor = models.KMeansFeatures.PatchSampler(n_patches=400000,
                                                          patch_size=5,
                                                          n_jobs=-1)
@@ -334,10 +336,19 @@ def kmeans_002_new():
     del images
     gc.collect()
     # mdl = models.Ridge.RidgeRFEstimator(alpha=14, n_estimators=250, n_jobs=-1)
-    wrapper = models.Base.ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 14, 'n_estimators': 250}, -1)
+    wrapper = models.Base.ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 14, 'n_estimators': 250}, n_jobs=-1)
     # This will exceed 15GB of memory if the train_x is not memmapped and sample is < 1
     # I think this is because the wrapper object will save copies of the train_x and train_y when it splits it
-    wrapper.cross_validation(train_x, train_y)
+    # CV of .117 and .116 on 2-fold CV of 50% sample
+    wrapper.cross_validation(train_x, train_y, n_folds=5)
+
+    # Auto CV not playing nice.  roll it manually
+    est = models.Ridge.RidgeRFEstimator(alpha=14, n_estimators=250, n_jobs=-1)
+    cv_x, cv_x_test, cv_y, cv_y_test = cross_validation.train_test_split(train_x, train_y, train_size=0.8)
+    del train_x
+    est.fit(cv_x, cv_y)
+    pred = est.predict(cv_x_test)
+    rmse = classes.rmse(cv_y_test, pred)
 
 
 def kmeans_centroids(fit_centroids=False):
