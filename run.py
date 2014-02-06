@@ -400,7 +400,7 @@ def kmeans_003():
 
     # Problematic here - memory usage spikes to ~ 11GB when threads return
     # train_x = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_002_new.npy', memmap=True)
-    train_x = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_002_new_minibatch.npy', memmap=True, force_rerun=True)
+    train_x = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_002_new.npy', memmap=True)
     train_y = classes.train_solutions.data
     # Unload some objects
     del images
@@ -408,7 +408,7 @@ def kmeans_003():
     # mdl = models.Ridge.RidgeRFEstimator(alpha=14, n_estimators=250, n_jobs=-1)
     wrapper = models.Base.ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 14, 'n_estimators': 250}, n_jobs=-1)
     params = {
-        'alpha': [0.1, 1.0, 10.0, 15.0, 20.0, 25.0],
+        'alpha': [1.0, 10.0, 15.0, 20.0, 25.0],
         'n_estimators': [100, 500]
     }
 
