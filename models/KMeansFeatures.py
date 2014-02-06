@@ -579,14 +579,14 @@ class KMeansFeatureGenerator(BaseEstimator, TransformerMixin):
             self.save_to_file()
         return self
 
-    def transform(self, X, save_to_file=None, memmap=False):
+    def transform(self, X, save_to_file=None, memmap=False, force_rerun=False):
         """
         Expects X to be in the shape of (n, x, y, chan)
         """
         if not hasattr(self, 'centroids_'):
             raise RuntimeError("Model has not been fitted")
 
-        if save_to_file is not None and os.path.exists(save_to_file):
+        if save_to_file is not None and os.path.exists(save_to_file) and not force_rerun:
             logger.info("File already exists, loading from {}".format(save_to_file))
             if memmap:
                 res = joblib.load(save_to_file, mmap_mode='r+')

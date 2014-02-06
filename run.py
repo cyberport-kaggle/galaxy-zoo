@@ -334,7 +334,7 @@ def kmeans_002_new():
 
     # Problematic here - memory usage spikes to ~ 11GB when threads return
     # train_x = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_002_new.npy', memmap=True)
-    train_x = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_002_new_minibatch.npy', memmap=True)
+    train_x = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_002_new_minibatch.npy', memmap=True, force_rerun=True)
     train_y = classes.train_solutions.data
     # Unload some objects
     del images
@@ -350,6 +350,7 @@ def kmeans_002_new():
 
     # CV of .108 on full set in 3-fold, 11 minutes
     # CV of .1107 on full set in 2-fold, 8 minutes
+    # CV of .1107 on full set in 2-fold with minibatch, n_init = 3.  In this case, minibatch is slower than spherical because of the inits (~14 min to cluster)
     wrapper.cross_validation(train_x, train_y, n_folds=2, parallel_estimator=True)
 
     params = {
