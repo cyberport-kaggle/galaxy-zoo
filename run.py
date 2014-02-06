@@ -408,12 +408,13 @@ def kmeans_003():
     # mdl = models.Ridge.RidgeRFEstimator(alpha=14, n_estimators=250, n_jobs=-1)
     wrapper = models.Base.ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 14, 'n_estimators': 500}, n_jobs=-1)
     params = {
-        'alpha': [20.0, 25.0, 30, 40, 50, 75, 100],
-        'n_estimators': [500]
+        'alpha': [20.0, 25.0, 35, 50, 75, 100],
+        'n_estimators': [250]
     }
 
-    # 500 trees and alpha 25 gives cv of .10972 on 2-fold CV
-    # Re-running with larger range of alpha
+    # 500 trees and alpha 25 gives cv of .10972 on 2-fold CV, but 25 was on the upper range of the search space,
+    # So need to re-run with larger range of alpha
+    # Will hit 30GB of ram with 500 trees.
     wrapper.grid_search(train_x, train_y, params, refit=False, parallel_estimator=True)
 
 
