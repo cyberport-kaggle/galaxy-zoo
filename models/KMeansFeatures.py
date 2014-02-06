@@ -3,6 +3,7 @@ import multiprocessing
 import itertools
 import math
 import os
+import shutil
 import tempfile
 from joblib import Parallel, delayed
 import joblib
@@ -283,7 +284,7 @@ def chunked_extract_features(idx, X, rf_size, centroids, mean, p, whitening=True
     idx = [y for y in idx if y is not None]
     res = [None] * len(idx)
     for i, img_idx in enumerate(idx):
-        if (i + 1) % 500 == 0:
+        if (i + 1) % 1000 == 0:
             logger.info("Extracting features on image {} / {}".format(i + 1, len(idx)))
 
         this_x = X[img_idx]
@@ -554,7 +555,7 @@ class KMeansFeatureGenerator(BaseEstimator, TransformerMixin):
         return res, mean, p
 
     def fit(self, X, y=None):
-        if os.path.exists(self.result_path) and not self.force_rerun:
+        if os.path.exists(self.result_path + '_centroids.npy') and not self.force_rerun:
             self.load_from_file()
         else:
             logger.info("Normalizing")

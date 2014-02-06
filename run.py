@@ -4,6 +4,7 @@ Run scripts for individual models in Galaxy Zoo
 import multiprocessing
 import os
 import time
+import gc
 from sklearn.ensemble import RandomForestRegressor
 
 import classes
@@ -320,9 +321,21 @@ def kmeans_002_new():
                                                                     result_path='data/mdl_kmeans_002_new',
                                                                     n_iterations=20,
                                                                     n_jobs=-1)
+
     kmeans_generator.fit(patches)
+
+    del patches
+    gc.collect()
+
+    # Problematic here - memory usage spikes to ~ 11GB when recombining
     train_x = kmeans_generator.transform(images)
-    mdl = models.Ridge.RidgeRFEstimator(alpha=14, n_estimators=250, n_jobs=-1)
+    train_y = classes.train_solutions.data
+    # Unload some objects
+    del images
+    gc.collect()
+    # mdl = models.Ridge.RidgeRFEstimator(alpha=14, n_estimators=250, n_jobs=-1)
+    wrapper = models.Base.ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 14, 'n_estimators': 250}, -1)
+    wrapper.cross_validation(train_x, train_y, sample=0.5)
 
 
 def kmeans_centroids(fit_centroids=False):
