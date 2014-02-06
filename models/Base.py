@@ -3,7 +3,6 @@ import multiprocessing
 import time
 from joblib import Parallel, delayed
 import joblib
-import math
 from sklearn import grid_search, cross_validation, clone
 from sklearn.base import BaseEstimator, TransformerMixin
 from classes import train_solutions, RawImage, logger, rmse_scorer, rmse, chunks
@@ -728,14 +727,9 @@ class ModelWrapper(object):
         }
 
         estimator = self.get_estimator()
-
-        # If we have few folds and enough cores, can parallelize underlying estimators too
-        cores_per_fold = int(math.floor(self.n_jobs / n_folds))
+        # Make sure to not parallelize the estimator
         if 'n_jobs' in estimator.get_params().keys():
-            if cores_per_fold > 1:
-                estimator.set_params(n_jobs=cores_per_fold)
-            else:
-                estimator.set_params(n_jobs=1)
+            estimator.set_params(n_jobs=1)
 
         self.cv_scores = cross_validation.cross_val_score(estimator, self.cv_x, self.cv_y, **params)
         logger.info("Cross validation completed in {}.  Scores:".format(time.time() - start_time))

@@ -323,6 +323,7 @@ def kmeans_002_new():
                                                                     n_jobs=-1)
 
     kmeans_generator.fit(patches)
+
     del patches
     gc.collect()
 
@@ -332,7 +333,6 @@ def kmeans_002_new():
     # Unload some objects
     del images
     gc.collect()
-
     # mdl = models.Ridge.RidgeRFEstimator(alpha=14, n_estimators=250, n_jobs=-1)
     wrapper = models.Base.ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 14, 'n_estimators': 250}, -1)
     # This will exceed 15GB of memory if the train_x is not memmapped and sample is < 1
