@@ -576,7 +576,7 @@ class KMeansFeatureGenerator(BaseEstimator, TransformerMixin):
             raise RuntimeError("Model has not been fitted")
 
         if save_to_file is not None and os.path.exists(save_to_file):
-            # Load from file
+            logger.info("File already exists, loading from {}".format(save_to_file))
             if memmap:
                 res = joblib.load(save_to_file, mmap_mode='r+')
             else:
@@ -590,6 +590,7 @@ class KMeansFeatureGenerator(BaseEstimator, TransformerMixin):
             )
             res = np.vstack(res)
             if save_to_file is not None:
+                logger.info("Saving results to file {}".format(save_to_file))
                 joblib.dump(res, save_to_file)
                 if memmap:
                     res = joblib.load(save_to_file, mmap_mode='r+')

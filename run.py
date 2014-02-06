@@ -327,7 +327,7 @@ def kmeans_002_new():
     del patches
     gc.collect()
 
-    # Problematic here - memory usage spikes to ~ 11GB when recombining
+    # Problematic here - memory usage spikes to ~ 11GB when threads return
     train_x = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_002_new.npy', memmap=True)
     train_y = classes.train_solutions.data
     # Unload some objects
@@ -335,8 +335,8 @@ def kmeans_002_new():
     gc.collect()
     # mdl = models.Ridge.RidgeRFEstimator(alpha=14, n_estimators=250, n_jobs=-1)
     wrapper = models.Base.ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 14, 'n_estimators': 250}, -1)
-    # This will exceed 15GB of memory
-    wrapper.cross_validation(train_x, train_y, sample=0.5)
+    # This will exceed 15GB of memory if the train_x is not memmapped
+    wrapper.cross_validation(train_x, train_y)
 
 
 def kmeans_centroids(fit_centroids=False):
