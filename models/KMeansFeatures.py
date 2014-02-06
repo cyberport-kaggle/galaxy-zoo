@@ -568,20 +568,32 @@ class KMeansFeatureGenerator(BaseEstimator, TransformerMixin):
             self.save_to_file()
         return self
 
-    def transform(self, X):
+    def transform(self, X, save_to_file=None, memmap=False):
         """
         Expects X to be in the shape of (n, x, y, chan)
         """
         if not hasattr(self, 'centroids_'):
             raise RuntimeError("Model has not been fitted")
 
-        all_rows = range(X.shape[0])
-        chunked_rows = list(chunks(all_rows, self.n_jobs))
-        logger.info("Transforming in {} jobs, chunk sizes: {}".format(self.n_jobs, [len(x) for x in chunked_rows]))
-        res = Parallel(n_jobs=self.n_jobs, verbose=self.verbose)(
-            delayed(chunked_extract_features)(i, X, self.rf_size, self.centroids_, self.mean_, self.p_, True) for i in chunked_rows
-        )
-        res = np.vstack(res)
+        if save_to_file is not None and os.path.exists(save_to_file):
+            # Load from file
+            if memmap:
+                res = joblib.load(save_to_file, mmap_mode='r+')
+            else:
+                res = joblib.load(save_to_file)
+        else:
+            all_rows = range(X.shape[0])
+            chunked_rows = list(chunks(all_rows, self.n_jobs))
+            logger.info("Transforming in {} jobs, chunk sizes: {}".format(self.n_jobs, [len(x) for x in chunked_rows]))
+            res = Parallel(n_jobs=self.n_jobs, verbose=self.verbose)(
+                delayed(chunked_extract_features)(i, X, self.rf_size, self.centroids_, self.mean_, self.p_, True) for i in chunked_rows
+            )
+            res = np.vstack(res)
+            if save_to_file is not None:
+                joblib.dump(res, save_to_file)
+                if memmap:
+                    res = joblib.load(save_to_file, mmap_mode='r+')
+
         return res
 
     def save_to_file(self):
