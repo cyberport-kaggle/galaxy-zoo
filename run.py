@@ -340,15 +340,20 @@ def kmeans_002_new():
     # This will exceed 15GB of memory if the train_x is not memmapped and sample is < 1
     # I think this is because the wrapper object will save copies of the train_x and train_y when it splits it
     # CV of .117 and .116 on 2-fold CV of 50% sample
-    wrapper.cross_validation(train_x, train_y, n_folds=5)
 
-    # Auto CV not playing nice.  roll it manually
-    est = models.Ridge.RidgeRFEstimator(alpha=14, n_estimators=250, n_jobs=-1)
-    cv_x, cv_x_test, cv_y, cv_y_test = cross_validation.train_test_split(train_x, train_y, train_size=0.8)
-    del train_x
-    est.fit(cv_x, cv_y)
-    pred = est.predict(cv_x_test)
-    rmse = classes.rmse(cv_y_test, pred)
+    # CV of .107 on full set with 5-fold CV.  Really accurate, but takes about 15 minutes to do a fold, parallellized at the estimator level
+    # Also takes over 20GB of RAM, so need a larger instance to run
+
+    # CV of .108 on full set in 3-fold, 11 minutes
+    # CV of .1107 on full set in 2-fold, 8 minutes
+    wrapper.cross_validation(train_x, train_y, n_folds=2, parallel_estimator=True)
+
+    params = {
+        'alpha': [0.1, 1.0, 10.0, 15.0],
+        'n_estimators': [50, 100, 500]
+    }
+
+    wrapper.grid_search(train_x, train_y, params, refit=False, parallel_estimator=True)
 
 
 def kmeans_centroids(fit_centroids=False):
