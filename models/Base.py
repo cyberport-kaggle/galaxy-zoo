@@ -1,5 +1,6 @@
 from __future__ import division
 import multiprocessing
+import pprint
 import time
 from joblib import Parallel, delayed
 import joblib
@@ -699,7 +700,7 @@ class ModelWrapper(object):
         logger.info("Found best parameters:")
         logger.info(self.grid_search_estimator.best_params_)
         logger.info("All results:")
-        logger.info(self.grid_search_estimator.grid_scores_)
+        logger.info(pprint.pformat(self.grid_search_estimator.grid_scores_))
 
         if params['refit']:
             logger.info("Predicting on holdout set")

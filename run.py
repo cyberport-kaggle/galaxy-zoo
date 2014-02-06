@@ -145,10 +145,10 @@ def ridge_rf_001(outfile='sub_ridge_rf_001.csv'):
         'verbose': 3,
         'oob_score': True
     }, n_jobs=-1)
-    mdl.cross_validation(train_x, train_y, sample=0.5, n_folds=3)
+    # mdl.cross_validation(train_x, train_y, sample=0.5, n_folds=3)
     mdl.grid_search(train_x, train_y, {
-        'alpha': [1],
-        'n_estimators': [10]
+        'alpha': [1, 2],
+        'n_estimators': [5]
     }, sample=0.1)
 
     test_x = np.load(test_predictors_file)
@@ -406,12 +406,14 @@ def kmeans_003():
     del images
     gc.collect()
     # mdl = models.Ridge.RidgeRFEstimator(alpha=14, n_estimators=250, n_jobs=-1)
-    wrapper = models.Base.ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 14, 'n_estimators': 250}, n_jobs=-1)
+    wrapper = models.Base.ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 14, 'n_estimators': 500}, n_jobs=-1)
     params = {
-        'alpha': [1.0, 10.0, 15.0, 20.0, 25.0],
-        'n_estimators': [100, 500]
+        'alpha': [20.0, 25.0, 30, 40, 50, 75, 100],
+        'n_estimators': [500]
     }
 
+    # 500 trees and alpha 25 gives cv of .10972 on 2-fold CV
+    # Re-running with larger range of alpha
     wrapper.grid_search(train_x, train_y, params, refit=False, parallel_estimator=True)
 
 
