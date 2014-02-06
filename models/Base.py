@@ -656,7 +656,7 @@ class ModelWrapper(object):
         params.update(**kwargs)
         return self.estimator_class(**params)
 
-    def grid_search(self, X, y, grid_search_params, grid_search_class=None, sample=None, refit=True, parallel_estimator=False):
+    def grid_search(self, X, y, grid_search_params, grid_search_class=None, sample=None, n_folds=2, refit=True, parallel_estimator=False):
         cls = grid_search_class or grid_search.GridSearchCV
         logger.info("Performing grid search")
         start_time = time.time()
@@ -665,7 +665,7 @@ class ModelWrapper(object):
             'verbose': 3,
             'refit':  refit,
             'n_jobs': self.n_jobs,
-            'cv': 2
+            'cv': n_folds
         }
         estimator = self.get_estimator()
 

@@ -318,16 +318,23 @@ def kmeans_002_new():
     images = train_x_crop_scale.transform()
     patches = patch_extractor.transform(images)
 
+    # spherical generator
+    # kmeans_generator = models.KMeansFeatures.KMeansFeatureGenerator(n_centroids=1600,
+    #                                                                 rf_size=5,
+    #                                                                 result_path='data/mdl_kmeans_002_new',
+    #                                                                 n_iterations=20,
+    #                                                                 n_jobs=-1,)
+
+    # minibatch generator
     kmeans_generator = models.KMeansFeatures.KMeansFeatureGenerator(n_centroids=1600,
                                                                     rf_size=5,
-                                                                    # result_path='data/mdl_kmeans_002_new',
                                                                     result_path='data/mdl_kmeans_002_new_minibatch',
                                                                     method='minibatch',
-                                                                    force_rerun=True,
-                                                                    # n_iterations=20,
+                                                                    n_init=1,
                                                                     n_jobs=-1,)
 
-    kmeans_generator.fit(patches, n_init=1)
+
+    kmeans_generator.fit(patches)
 
     del patches
     gc.collect()
@@ -351,11 +358,58 @@ def kmeans_002_new():
     # CV of .108 on full set in 3-fold, 11 minutes
     # CV of .1107 on full set in 2-fold, 8 minutes
     # CV of .1107 on full set in 2-fold with minibatch, n_init = 3.  In this case, minibatch is slower than spherical because of the inits (~14 min to cluster)
+    # n_init = 1 takes 7 minutes, so not much faster than the spherical method, but cv score was .1102 on 2-fold, which is the best so far with this number of folds
     wrapper.cross_validation(train_x, train_y, n_folds=2, parallel_estimator=True)
 
+
+def kmeans_003():
+    """
+    Grid search for Ridge RF parameters
+    Not sure whether to use spherical or minibatch, so maybe do one run with both
+    """
+
+    train_x_crop_scale = models.Base.CropScaleImageTransformer(training=True,
+                                                               result_path='data/data_train_crop_150_scale_15.npy',
+                                                               crop_size=150,
+                                                               scaled_size=15,
+                                                               n_jobs=-1,
+                                                               memmap=True)
+
+
+
+    # spherical generator
+    kmeans_generator = models.KMeansFeatures.KMeansFeatureGenerator(n_centroids=1600,
+                                                                    rf_size=5,
+                                                                    result_path='data/mdl_kmeans_002_new',
+                                                                    n_iterations=20,
+                                                                    n_jobs=-1,)
+
+    # minibatch generator
+    # kmeans_generator = models.KMeansFeatures.KMeansFeatureGenerator(n_centroids=1600,
+    #                                                                 rf_size=5,
+    #                                                                 result_path='data/mdl_kmeans_002_new_minibatch',
+    #                                                                 method='minibatch',
+    #                                                                 n_init=1,
+    #                                                                 n_jobs=-1,)
+
+
+    # Don't need to fit, as already cached
+    patches = ''
+    kmeans_generator.fit(patches)
+    images = train_x_crop_scale.transform()
+
+    # Problematic here - memory usage spikes to ~ 11GB when threads return
+    # train_x = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_002_new.npy', memmap=True)
+    train_x = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_002_new_minibatch.npy', memmap=True, force_rerun=True)
+    train_y = classes.train_solutions.data
+    # Unload some objects
+    del images
+    gc.collect()
+    # mdl = models.Ridge.RidgeRFEstimator(alpha=14, n_estimators=250, n_jobs=-1)
+    wrapper = models.Base.ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 14, 'n_estimators': 250}, n_jobs=-1)
     params = {
-        'alpha': [0.1, 1.0, 10.0, 15.0],
-        'n_estimators': [50, 100, 500]
+        'alpha': [0.1, 1.0, 10.0, 15.0, 20.0, 25.0],
+        'n_estimators': [100, 500]
     }
 
     wrapper.grid_search(train_x, train_y, params, refit=False, parallel_estimator=True)
