@@ -558,7 +558,7 @@ class KMeansFeatureGenerator(BaseEstimator, TransformerMixin):
         res = np.dot(X - mean, p)
         return res, mean, p
 
-    def fit(self, X, y=None):
+    def fit(self, X, y=None, n_init=3):
         if os.path.exists(self.result_path + '_centroids.npy') and not self.force_rerun:
             self.load_from_file()
         else:
@@ -571,7 +571,7 @@ class KMeansFeatureGenerator(BaseEstimator, TransformerMixin):
             if self.method == "spherical":
                 self.centroids_ = parallel_spherical_kmeans(res, self.n_centroids, self.n_iterations, n_jobs=self.n_jobs)
             elif self.method == "minibatch":
-                kmeans = MiniBatchKMeans(n_clusters=self.n_centroids, verbose=True, batch_size=self.n_centroids * 20, compute_labels=False)
+                kmeans = MiniBatchKMeans(n_clusters=self.n_centroids, verbose=True, batch_size=self.n_centroids * 20, compute_labels=False, n_init=n_init)
                 kmeans.fit(res)
                 self.centroids_ = kmeans.cluster_centers_
             else:

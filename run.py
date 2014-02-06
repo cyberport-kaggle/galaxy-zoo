@@ -323,10 +323,11 @@ def kmeans_002_new():
                                                                     # result_path='data/mdl_kmeans_002_new',
                                                                     result_path='data/mdl_kmeans_002_new_minibatch',
                                                                     method='minibatch',
+                                                                    force_rerun=True,
                                                                     # n_iterations=20,
                                                                     n_jobs=-1,)
 
-    kmeans_generator.fit(patches)
+    kmeans_generator.fit(patches, n_init=1)
 
     del patches
     gc.collect()
