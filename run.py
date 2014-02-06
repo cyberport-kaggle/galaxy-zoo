@@ -147,8 +147,8 @@ def ridge_rf_001(outfile='sub_ridge_rf_001.csv'):
     }, n_jobs=-1)
     mdl.cross_validation(train_x, train_y, sample=0.5, n_folds=3)
     mdl.grid_search(train_x, train_y, {
-        'alpha': [1, 5, 10],
-        'n_estimators': [40, 80]
+        'alpha': [1],
+        'n_estimators': [10]
     }, sample=0.1)
 
     test_x = np.load(test_predictors_file)
@@ -356,8 +356,8 @@ def kmeans_002_new():
     # Also takes over 20GB of RAM, so need a larger instance to run
 
     # CV of .108 on full set in 3-fold, 11 minutes
-    # CV of .1107 on full set in 2-fold, 8 minutes
-    # CV of .1107 on full set in 2-fold with minibatch, n_init = 3.  In this case, minibatch is slower than spherical because of the inits (~14 min to cluster)
+    # CV of .110 on full set in 2-fold, 8 minutes
+    # CV of .110 on full set in 2-fold with minibatch, n_init = 3.  In this case, minibatch is slower than spherical because of the inits (~14 min to cluster)
     # n_init = 1 takes 7 minutes, so not much faster than the spherical method, but cv score was .1102 on 2-fold, which is the best so far with this number of folds
     wrapper.cross_validation(train_x, train_y, n_folds=2, parallel_estimator=True)
 
