@@ -656,7 +656,7 @@ class ModelWrapper(object):
         params.update(**kwargs)
         return self.estimator_class(**params)
 
-    def grid_search(self, X, y, grid_search_params, grid_search_class=None, sample=None, refit=True):
+    def grid_search(self, X, y, grid_search_params, grid_search_class=None, sample=None, refit=True, parallel_estimator=False):
         cls = grid_search_class or grid_search.GridSearchCV
         logger.info("Performing grid search")
         start_time = time.time()
@@ -670,6 +670,12 @@ class ModelWrapper(object):
         estimator = self.get_estimator()
 
         if 'n_jobs' in estimator.get_params().keys():
+            # If the estimator can be parallelized, and parallel_estimator is True, then parallelize at that level
+            # otherwise parallelize at the grid search level
+            if parallel_estimator:
+                estimator.set_params(n_jobs=self.n_jobs)
+                params['n_jobs'] = 1
+            else:
                 estimator.set_params(n_jobs=1)
 
         self.grid_search_estimator = cls(estimator, grid_search_params, **params)
@@ -703,7 +709,7 @@ class ModelWrapper(object):
 
         logger.info("Grid search completed in {}".format(time.time() - start_time))
 
-    def cross_validation(self, X, y, n_folds=2, cv_class=None, sample=None):
+    def cross_validation(self, X, y, n_folds=2, cv_class=None, sample=None, parallel_estimator=False):
         cls = cv_class or cross_validation.KFold
 
         start_time = time.time()
@@ -730,7 +736,11 @@ class ModelWrapper(object):
         estimator = self.get_estimator()
         # Make sure to not parallelize the estimator
         if 'n_jobs' in estimator.get_params().keys():
-            estimator.set_params(n_jobs=1)
+            if parallel_estimator:
+                estimator.set_params(n_jobs=self.n_jobs)
+                params['n_jobs'] = 1
+            else:
+                estimator.set_params(n_jobs=1)
 
         self.cv_scores = cross_validation.cross_val_score(estimator, self.cv_x, self.cv_y, **params)
         logger.info("Cross validation completed in {}.  Scores:".format(time.time() - start_time))

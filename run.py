@@ -145,10 +145,10 @@ def ridge_rf_001(outfile='sub_ridge_rf_001.csv'):
         'verbose': 3,
         'oob_score': True
     }, n_jobs=-1)
-    mdl.cross_validation(train_x, train_y, sample=0.1)
+    mdl.cross_validation(train_x, train_y, sample=0.5, n_folds=3)
     mdl.grid_search(train_x, train_y, {
         'alpha': [1, 5, 10],
-        'n_estimators': [10, 20]
+        'n_estimators': [40, 80]
     }, sample=0.1)
 
     test_x = np.load(test_predictors_file)
