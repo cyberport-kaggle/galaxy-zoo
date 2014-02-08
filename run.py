@@ -17,6 +17,9 @@ from sklearn.cross_validation import KFold
 from IPython import embed
 import cPickle as pickle
 import time
+from models.Base import CropScaleImageTransformer, ModelWrapper
+from models.KMeansFeatures import KMeansFeatureGenerator
+
 
 logger = logging.getLogger('galaxy')
 
@@ -366,23 +369,25 @@ def kmeans_003():
     """
     Grid search for Ridge RF parameters
     Not sure whether to use spherical or minibatch, so maybe do one run with both
+
+    .106 on the leaderboard.  So the difference in CV scores narrowed
     """
 
-    train_x_crop_scale = models.Base.CropScaleImageTransformer(training=True,
-                                                               result_path='data/data_train_crop_150_scale_15.npy',
-                                                               crop_size=150,
-                                                               scaled_size=15,
-                                                               n_jobs=-1,
-                                                               memmap=True)
+    train_x_crop_scale = CropScaleImageTransformer(training=True,
+                                                   result_path='data/data_train_crop_150_scale_15.npy',
+                                                   crop_size=150,
+                                                   scaled_size=15,
+                                                   n_jobs=-1,
+                                                   memmap=True)
 
 
 
     # spherical generator
-    kmeans_generator = models.KMeansFeatures.KMeansFeatureGenerator(n_centroids=1600,
-                                                                    rf_size=5,
-                                                                    result_path='data/mdl_kmeans_002_new',
-                                                                    n_iterations=20,
-                                                                    n_jobs=-1,)
+    kmeans_generator = KMeansFeatureGenerator(n_centroids=1600,
+                                              rf_size=5,
+                                              result_path='data/mdl_kmeans_002_new',
+                                              n_iterations=20,
+                                              n_jobs=-1,)
 
     # minibatch generator
     # kmeans_generator = models.KMeansFeatures.KMeansFeatureGenerator(n_centroids=1600,
@@ -406,9 +411,9 @@ def kmeans_003():
     del images
     gc.collect()
     # mdl = models.Ridge.RidgeRFEstimator(alpha=14, n_estimators=250, n_jobs=-1)
-    wrapper = models.Base.ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 14, 'n_estimators': 500}, n_jobs=-1)
+    wrapper = ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 14, 'n_estimators': 500}, n_jobs=-1)
     params = {
-        'alpha': [20.0, 25.0, 35, 50, 75, 100],
+        'alpha': [150, 250, 500, 750, 1000],
         'n_estimators': [250]
     }
 
@@ -416,6 +421,35 @@ def kmeans_003():
     # So need to re-run with larger range of alpha
     # Will hit 30GB of ram with 500 trees.
     wrapper.grid_search(train_x, train_y, params, refit=False, parallel_estimator=True)
+
+    # [mean: -0.11024, std: 0.00018, params: {'n_estimators': 250, 'alpha': 20.0},
+    # mean: -0.11000, std: 0.00019, params: {'n_estimators': 250, 'alpha': 25.0},
+    # mean: -0.10969, std: 0.00018, params: {'n_estimators': 250, 'alpha': 35},
+    # mean: -0.10934, std: 0.00019, params: {'n_estimators': 250, 'alpha': 50},
+    # mean: -0.10892, std: 0.00025, params: {'n_estimators': 250, 'alpha': 75},
+    # mean: -0.10860, std: 0.00025, params: {'n_estimators': 250, 'alpha': 100},
+    # mean: -0.10828, std: 0.00019, params: {'n_estimators': 250, 'alpha': 150},
+    # mean: -0.10789, std: 0.00016, params: {'n_estimators': 250, 'alpha': 250},
+    # mean: -0.10775, std: 0.00024, params: {'n_estimators': 250, 'alpha': 500},
+    # mean: -0.10779, std: 0.00022, params: {'n_estimators': 250, 'alpha': 750},
+    # mean: -0.10784, std: 0.00023, params: {'n_estimators': 250, 'alpha': 1000}]
+
+    # Fit the final model
+    wrapper = ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 500, 'n_estimators': 500}, n_jobs=-1)
+    wrapper.fit(train_x, train_y)
+    test_x_crop_scale = CropScaleImageTransformer(training=False,
+                                                  result_path='data/data_test_crop_150_scale_15.npy',
+                                                  crop_size=150,
+                                                  scaled_size=15,
+                                                  n_jobs=-1,
+                                                  memmap=True)
+
+
+    test_images = test_x_crop_scale.transform()
+    test_x = kmeans_generator.transform(test_images, save_to_file='data/data_kmeans_test_features_003_new.npy', memmap=True)
+    res = wrapper.predict(test_x)
+    sub = classes.Submission(res)
+    sub.to_file('sub_kmeans_003.csv')
 
 
 def kmeans_centroids(fit_centroids=False):

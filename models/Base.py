@@ -766,4 +766,5 @@ class ModelWrapper(object):
         if not hasattr(self, 'estimator_'):
             raise RuntimeError("Estimator has not been trained")
 
+        logger.info("Predicting")
         return self.estimator_.predict(X)
