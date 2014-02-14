@@ -516,7 +516,7 @@ def kmeans_005():
     """
     Testing whether extracting patches from train and test images works better
     """
-    n_patches_vals = [400000, 500000, 600000]
+    n_patches_vals = [500000, 600000, 700000]
     include_test_images = [False, True]
     for n_patches in n_patches_vals:
         for incl in include_test_images:
@@ -570,6 +570,61 @@ def kmeans_005():
             wrapper.cross_validation(train_x, train_y, n_folds=2, parallel_estimator=True)
             del wrapper
             gc.collect()
+
+
+def kmeans_006():
+    """
+    Testing number of centroids
+    """
+    n_centroids_vals = [2000, 2500, 3000]
+    for n_centroids in n_centroids_vals:
+        s = 15
+        crop = 200
+        n_patches = 400000
+        rf_size = 5
+        logger.info("Training with n_centroids {}".format(n_centroids))
+
+        train_x_crop_scale = CropScaleImageTransformer(training=True,
+                                                       result_path='data/data_train_crop_{}_scale_{}.npy'.format(crop, s),
+                                                       crop_size=crop,
+                                                       scaled_size=s,
+                                                       n_jobs=-1,
+                                                       memmap=True)
+        test_x_crop_scale = CropScaleImageTransformer(training=False,
+                                                      result_path='data/data_test_crop_{}_scale_{}.npy'.format(crop, s),
+                                                      crop_size=crop,
+                                                      scaled_size=s,
+                                                      n_jobs=-1,
+                                                      memmap=True)
+
+        kmeans_generator = KMeansFeatureGenerator(n_centroids=n_centroids,
+                                                  rf_size=rf_size,
+                                                  result_path='data/mdl_kmeans_004_scale_{}_rf_{}'.format(s, rf_size),
+                                                  n_iterations=20,
+                                                  n_jobs=-1,)
+
+        patch_extractor = models.KMeansFeatures.PatchSampler(n_patches=n_patches,
+                                                             patch_size=rf_size,
+                                                             n_jobs=-1)
+        images = train_x_crop_scale.transform()
+
+        patches = patch_extractor.transform(images)
+
+        kmeans_generator.fit(patches)
+
+        del patches
+        gc.collect()
+
+        train_x = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_005_patches_{}_test_{}.npy'.format(n_patches, incl), memmap=True)
+        train_y = classes.train_solutions.data
+        # Unload some objects
+        del images
+        gc.collect()
+
+        wrapper = ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 500, 'n_estimators': 250}, n_jobs=-1)
+        wrapper.cross_validation(train_x, train_y, n_folds=2, parallel_estimator=True)
+        del wrapper
+        gc.collect()
 
 
 def kmeans_centroids(fit_centroids=False):
