@@ -455,9 +455,15 @@ def kmeans_003():
 def kmeans_004():
     """
     Tuning the scale/crop and RF size parameters
+
+    First number is the scaling, cropped to 200, with rf size of 5.  75 scaling took forever ot transform, so killed
+    [(30, array([-0.11374265, -0.1134896 ]))
+     (50, array([-0.11677854, -0.11696837]))]
+
+    Trying again with larger RF size of 10
     """
     crops = [200]  # Should probably also add 250
-    scales = [30, 50, 75]  # Scaling is probably the most important part here
+    scales = [30, 50]  # Scaling is probably the most important part here
 
     scores = []
     for s in scales:
@@ -465,7 +471,7 @@ def kmeans_004():
         n_centroids = 1600
         n_patches = 400000
         # rf_size = int(round(s * .2))
-        rf_size = 5
+        rf_size = 10
         logger.info("Training with crop {}, scale {}, patch size {}, patches {}, centroids {}".format(crop, s, rf_size, n_patches, n_centroids))
 
         train_x_crop_scale = CropScaleImageTransformer(training=True,
@@ -475,7 +481,6 @@ def kmeans_004():
                                                        n_jobs=-1,
                                                        memmap=True)
 
-        # Try an RF size of 20% of the scaled size
         # spherical generator
         kmeans_generator = KMeansFeatureGenerator(n_centroids=n_centroids,
                                                   rf_size=rf_size,
@@ -490,7 +495,6 @@ def kmeans_004():
         patches = patch_extractor.transform(images)
 
         kmeans_generator.fit(patches)
-        images = train_x_crop_scale.transform()
 
         del patches
         gc.collect()
@@ -504,6 +508,68 @@ def kmeans_004():
         wrapper = ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 500, 'n_estimators': 250}, n_jobs=-1)
         wrapper.cross_validation(train_x, train_y, n_folds=2, parallel_estimator=True)
         scores.append((s, wrapper.cv_scores))
+        del wrapper
+        gc.collect()
+
+
+def kmeans_005():
+    """
+    Testing whether extracting patches from train and test images works better
+    """
+    n_patches_vals = [400000, 500000, 600000]
+    include_test_images = [False, True]
+    for n_patches in n_patches_vals:
+        for incl in include_test_images:
+            s = 15
+            crop = 200
+            n_centroids = 1600
+            rf_size = 5
+            logger.info("Training with n_patches {}, with test images {}".format(n_patches, incl))
+
+            train_x_crop_scale = CropScaleImageTransformer(training=True,
+                                                           result_path='data/data_train_crop_{}_scale_{}.npy'.format(crop, s),
+                                                           crop_size=crop,
+                                                           scaled_size=s,
+                                                           n_jobs=-1,
+                                                           memmap=True)
+            test_x_crop_scale = CropScaleImageTransformer(training=False,
+                                                          result_path='data/data_test_crop_{}_scale_{}.npy'.format(crop, s),
+                                                          crop_size=crop,
+                                                          scaled_size=s,
+                                                          n_jobs=-1,
+                                                          memmap=True)
+
+            kmeans_generator = KMeansFeatureGenerator(n_centroids=n_centroids,
+                                                      rf_size=rf_size,
+                                                      result_path='data/mdl_kmeans_004_scale_{}_rf_{}'.format(s, rf_size),
+                                                      n_iterations=20,
+                                                      n_jobs=-1,)
+
+            patch_extractor = models.KMeansFeatures.PatchSampler(n_patches=n_patches,
+                                                                 patch_size=rf_size,
+                                                                 n_jobs=-1)
+            images = train_x_crop_scale.transform()
+            if incl:
+                test_images = test_x_crop_scale.transform()
+                images = np.vstack(images, test_images)
+
+            patches = patch_extractor.transform(images)
+
+            kmeans_generator.fit(patches)
+
+            del patches
+            gc.collect()
+
+            train_x = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_005_patches_{}_test_{}.npy'.format(n_patches, incl), memmap=True)
+            train_y = classes.train_solutions.data
+            # Unload some objects
+            del images
+            gc.collect()
+
+            wrapper = ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 500, 'n_estimators': 250}, n_jobs=-1)
+            wrapper.cross_validation(train_x, train_y, n_folds=2, parallel_estimator=True)
+            del wrapper
+            gc.collect()
 
 
 def kmeans_centroids(fit_centroids=False):
