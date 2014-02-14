@@ -452,6 +452,59 @@ def kmeans_003():
     sub.to_file('sub_kmeans_003.csv')
 
 
+def kmeans_004():
+    """
+    Tuning the scale/crop and RF size parameters
+    """
+    crops = [200]  # Should probably also add 250
+    scales = [30, 50, 75]  # Scaling is probably the most important part here
+
+    scores = []
+    for s in scales:
+        crop = 200
+        n_centroids = 1600
+        n_patches = 400000
+        rf_size = int(round(s * .2))
+        logger.info("Training with crop {}, scale {}, patch size {}, patches {}, centroids {}".format(crop, s, rf_size, n_patches, n_centroids))
+
+        train_x_crop_scale = CropScaleImageTransformer(training=True,
+                                                       result_path='data/data_train_crop_{}_scale_{}.npy'.format(crop, s),
+                                                       crop_size=crop,
+                                                       scaled_size=s,
+                                                       n_jobs=-1,
+                                                       memmap=True)
+
+        # Try an RF size of 20% of the scaled size
+        # spherical generator
+        kmeans_generator = KMeansFeatureGenerator(n_centroids=n_centroids,
+                                                  rf_size=rf_size,
+                                                  result_path='data/mdl_kmeans_004_scale_{}_rf_{}'.format(s, rf_size),
+                                                  n_iterations=20,
+                                                  n_jobs=-1,)
+
+        patch_extractor = models.KMeansFeatures.PatchSampler(n_patches=n_patches,
+                                                             patch_size=rf_size,
+                                                             n_jobs=-1)
+        images = train_x_crop_scale.transform()
+        patches = patch_extractor.transform(images)
+
+        kmeans_generator.fit(patches)
+        images = train_x_crop_scale.transform()
+
+        del patches
+        gc.collect()
+
+        train_x = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_004_scale_{}_rf_{}.npy'.format(s, rf_size), memmap=True)
+        train_y = classes.train_solutions.data
+        # Unload some objects
+        del images
+        gc.collect()
+
+        wrapper = ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 500, 'n_estimators': 250}, n_jobs=-1)
+        wrapper.cross_validation(train_x, train_y, n_folds=2, parallel_estimator=True)
+        scores.append((s, wrapper.cv_scores))
+
+
 def kmeans_centroids(fit_centroids=False):
     """
     If fit_centroids is True, we extract patches, fit the centroids and pickle the object
