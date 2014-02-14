@@ -464,7 +464,8 @@ def kmeans_004():
         crop = 200
         n_centroids = 1600
         n_patches = 400000
-        rf_size = int(round(s * .2))
+        # rf_size = int(round(s * .2))
+        rf_size = 5
         logger.info("Training with crop {}, scale {}, patch size {}, patches {}, centroids {}".format(crop, s, rf_size, n_patches, n_centroids))
 
         train_x_crop_scale = CropScaleImageTransformer(training=True,
