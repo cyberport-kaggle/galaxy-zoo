@@ -527,6 +527,11 @@ def kmeans_004():
 def kmeans_005():
     """
     Testing whether extracting patches from train and test images works better
+
+    [(500000, False, array([-0.10799986, -0.10744586])),
+    (500000, True, array([-0.10790803, -0.10733288])),
+    (600000, False, array([-0.10812188, -0.10735988])),
+    (600000, True, array([-0.10778652, -0.10752664]))]
     """
     n_patches_vals = [500000, 600000, 700000]
     include_test_images = [False, True]
@@ -555,7 +560,7 @@ def kmeans_005():
 
             kmeans_generator = KMeansFeatureGenerator(n_centroids=n_centroids,
                                                       rf_size=rf_size,
-                                                      result_path='data/mdl_kmeans_004_scale_{}_rf_{}'.format(s, rf_size),
+                                                      result_path='data/mdl_kmeans_005_patches_{}_test{}'.format(n_patches, incl),
                                                       n_iterations=20,
                                                       n_jobs=-1,)
 
@@ -587,21 +592,25 @@ def kmeans_005():
 
             wrapper = ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 500, 'n_estimators': 250}, n_jobs=-1)
             wrapper.cross_validation(train_x, train_y, n_folds=2, parallel_estimator=True)
-            del wrapper
-            gc.collect()
+
             score = (n_patches, incl, wrapper.cv_scores)
             logger.info("Score: {}".format(score))
             scores.append(score)
+
+            del wrapper
+            gc.collect()
 
 
 def kmeans_006():
     """
     Testing number of centroids
     """
-    n_centroids_vals = [2000, 2500, 3000]
+    n_centroids_vals = [1000, 2000, 2500, 3000]
+    scores = []
+
     for n_centroids in n_centroids_vals:
         s = 15
-        crop = 200
+        crop = 150
         n_patches = 400000
         rf_size = 5
         logger.info("Training with n_centroids {}".format(n_centroids))
@@ -621,7 +630,7 @@ def kmeans_006():
 
         kmeans_generator = KMeansFeatureGenerator(n_centroids=n_centroids,
                                                   rf_size=rf_size,
-                                                  result_path='data/mdl_kmeans_004_scale_{}_rf_{}'.format(s, rf_size),
+                                                  result_path='data/mdl_kmeans_006_centroids_{}'.format(n_centroids),
                                                   n_iterations=20,
                                                   n_jobs=-1,)
 
@@ -637,7 +646,7 @@ def kmeans_006():
         del patches
         gc.collect()
 
-        train_x = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_005_patches_{}_test_{}.npy'.format(n_patches, incl), memmap=True)
+        train_x = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_006_centroids_{}.npy'.format(n_centroids), memmap=True)
         train_y = classes.train_solutions.data
         # Unload some objects
         del images
@@ -645,6 +654,11 @@ def kmeans_006():
 
         wrapper = ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 500, 'n_estimators': 250}, n_jobs=-1)
         wrapper.cross_validation(train_x, train_y, n_folds=2, parallel_estimator=True)
+
+        score = (n_centroids, wrapper.cv_scores)
+        logger.info("Scores: {}".format(score))
+        scores.append(score)
+
         del wrapper
         gc.collect()
 
