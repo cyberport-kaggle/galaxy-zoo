@@ -566,7 +566,7 @@ def kmeans_005():
             if incl:
                 test_images = test_x_crop_scale.transform()
                 images = np.vstack([images, test_images])
-            logger.info("Images ndarray shape: {}".format(images.shape))
+            logger.info("Extracting patches from images ndarray shape: {}".format(images.shape))
 
             patches = patch_extractor.transform(images)
             logger.info("Patches ndarray shape: {}".format(patches.shape))
@@ -576,6 +576,9 @@ def kmeans_005():
             del patches
             gc.collect()
 
+            # Reload the original images
+            images = train_x_crop_scale.transform()
+            logger.info("Generating features on images ndarray shape: {}".format(images.shape))
             train_x = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_005_patches_{}_test_{}.npy'.format(n_patches, incl), memmap=True)
             train_y = classes.train_solutions.data
             # Unload some objects
