@@ -684,12 +684,6 @@ def kmeans_006_submission():
                                                    scaled_size=s,
                                                    n_jobs=-1,
                                                    memmap=True)
-    test_x_crop_scale = CropScaleImageTransformer(training=False,
-                                                  result_path='data/data_test_crop_{}_scale_{}.npy'.format(crop, s),
-                                                  crop_size=crop,
-                                                  scaled_size=s,
-                                                  n_jobs=-1,
-                                                  memmap=True)
 
     kmeans_generator = KMeansFeatureGenerator(n_centroids=n_centroids,
                                               rf_size=rf_size,
@@ -718,11 +712,28 @@ def kmeans_006_submission():
     wrapper = ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 500, 'n_estimators': 500}, n_jobs=-1)
     wrapper.fit(train_x, train_y)
 
+    test_x_crop_scale = CropScaleImageTransformer(training=False,
+                                                  result_path='data/data_test_crop_{}_scale_{}.npy'.format(crop, s),
+                                                  crop_size=crop,
+                                                  scaled_size=s,
+                                                  n_jobs=-1,
+                                                  memmap=True)
+
     test_images = test_x_crop_scale.transform()
-    test_x = kmeans_generator.transform(test_images, save_to_file='data/data_kmeans_features_006_centroids_{}.npy'.format(n_centroids), memmap=True)
+    test_x = kmeans_generator.transform(test_images, save_to_file='data/data_test_kmeans_features_006_centroids_{}.npy'.format(n_centroids), memmap=True)
     res = wrapper.predict(test_x)
     sub = classes.Submission(res)
     sub.to_file('sub_kmeans_006.csv')
+
+
+def kmeans_007():
+    """
+    Kmeans on each RGB layer separately.
+
+    Coates' paper suggests that if the input data can be split into independent chunks, then we should do so.
+    This reduces the input dataset dimensionality by a factor of 3, so maybe also allows us to increase the RF size or scale size
+    """
+    pass
 
 
 def kmeans_centroids(fit_centroids=False):
