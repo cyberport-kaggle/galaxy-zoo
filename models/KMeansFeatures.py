@@ -43,7 +43,7 @@ def chunked_extract_patch(patch_nums, train_mmap, patch_size):
     # Filter out any Nones that might have been passed in
     patch_nums = [x for x in patch_nums if x is not None]
     res = [None] * len(patch_nums)
-    # train_mmap is of dimensions (n_training, image_rows, image_cols, channels)
+    # train_mmap is of dimensions (n_training, image_rows, image_cols, [channels])
     n_images = train_mmap.shape[0]
     image_rows = train_mmap.shape[1]
     image_cols = train_mmap.shape[2]
@@ -55,7 +55,7 @@ def chunked_extract_patch(patch_nums, train_mmap, patch_size):
 
         # Pick the right image and extract the patch
         img = train_mmap[p % n_images]
-        patch = img[row:row + patch_size, col:col + patch_size, :]
+        patch = img[row:row + patch_size, col:col + patch_size]
         res[i] = patch.flatten()
 
     return np.vstack(res)
@@ -285,13 +285,20 @@ def chunked_extract_features(idx, X, rf_size, centroids, mean, p, whitening=True
     idx = [y for y in idx if y is not None]
     res = [None] * len(idx)
     for i, img_idx in enumerate(idx):
-        if (i + 1) % 1000 == 0:
+        if (i + 1) % 10 == 0:
             logger.info("Extracting features on image {} / {}".format(i + 1, len(idx)))
 
-        this_x = X[img_idx]
-        patches = np.vstack((rolling_block(this_x[:, :, 0], rf_size),
+        # Shape of (n_images, x, y, [channel]).  Channel may not be present
+        if X.ndim == 4 and X.shape[3] == 3:
+            this_x = X[img_idx]
+            patches = np.vstack((rolling_block(this_x[:, :, 0], rf_size),
                              rolling_block(this_x[:, :, 1], rf_size),
                              rolling_block(this_x[:, :, 2], rf_size))).T
+        elif X.ndim == 3:
+            this_x = X[img_idx]
+            patches = np.vstack(rolling_block(this_x[:, :], rf_size)).T
+        else:
+            raise RuntimeError("Unexpected image dimensions: {}".format(X.shape))
 
         # normalize for contrast
         patches = normalize(patches)
@@ -321,6 +328,7 @@ def chunked_extract_features(idx, X, rf_size, centroids, mean, p, whitening=True
 
         res[i] = np.hstack((q1.flatten(), q2.flatten(), q3.flatten(), q4.flatten()))
 
+    # Return is an nparray of (n_images in batch, x * y * 4)
     return np.vstack(res)
 
 

@@ -224,3 +224,33 @@ a.run('train')
 b = models.RandomForest.RandomForestModel(cv_sample=0.1)
 b.estimator.set_params(n_estimators=10)
 b.run('train')
+
+
+import models
+from models.Base import CropScaleImageTransformer
+from models.KMeansFeatures import KMeansFeatureGenerator
+
+train_x_crop_scale = CropScaleImageTransformer(training=True,
+                                               # result_path='data/data_train_crop_150_scale_15.npy',
+                                               crop_size=150,
+                                               scaled_size=15,
+                                               n_jobs=-1,
+                                               memmap=True)
+
+raw_images = train_x_crop_scale.transform()
+
+patch_extractor = models.KMeansFeatures.PatchSampler(n_patches=1000,
+                                                     patch_size=5,
+                                                     n_jobs=-1)
+
+reds = raw_images[0:100, :, :, 0]
+a = patch_extractor.transform(reds)
+
+kmeans_generator = KMeansFeatureGenerator(n_centroids=10,
+                                          rf_size=5,
+                                          result_path='foo.npy',
+                                          n_iterations=20,
+                                          n_jobs=1)
+
+kmeans_generator.fit(a)
+train_reds = kmeans_generator.transform(reds)
