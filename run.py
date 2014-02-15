@@ -460,7 +460,16 @@ def kmeans_004():
     [(30, array([-0.11374265, -0.1134896 ]))
      (50, array([-0.11677854, -0.11696837]))]
 
-    Trying again with larger RF size of 10
+    Trying again with larger RF size of 10.
+    As a note, scale to 30 with rf 10 takes about 25 minutes to extract features on the train set
+    Scale to 50 with rf 10 takes almost 90 minutes.
+    [(30, array([-0.10828216, -0.1081058 ])),
+    (50, array([-0.10840914, -0.10868195]))]
+    Interesting that scale size of 50 does worse
+
+    Crop is not 150, so this is not really an apples to apples comparison with kmeans_003
+
+    It is possibly worth making a submission with scale 30 and rf size 10
     """
     crops = [200]  # Should probably also add 250
     scales = [30, 50]  # Scaling is probably the most important part here
@@ -492,7 +501,9 @@ def kmeans_004():
                                                              patch_size=rf_size,
                                                              n_jobs=-1)
         images = train_x_crop_scale.transform()
+        logger.info("Images ndarray shape: {}".format(images.shape))
         patches = patch_extractor.transform(images)
+        logger.info("Patches ndarray shape: {}".format(patches.shape))
 
         kmeans_generator.fit(patches)
 
@@ -504,6 +515,7 @@ def kmeans_004():
         # Unload some objects
         del images
         gc.collect()
+        logger.info("Train X ndarray shape: {}".format(train_x.shape))
 
         wrapper = ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 500, 'n_estimators': 250}, n_jobs=-1)
         wrapper.cross_validation(train_x, train_y, n_folds=2, parallel_estimator=True)
@@ -518,10 +530,12 @@ def kmeans_005():
     """
     n_patches_vals = [500000, 600000, 700000]
     include_test_images = [False, True]
+
+    scores = []
     for n_patches in n_patches_vals:
         for incl in include_test_images:
             s = 15
-            crop = 200
+            crop = 150
             n_centroids = 1600
             rf_size = 5
             logger.info("Training with n_patches {}, with test images {}".format(n_patches, incl))
@@ -551,9 +565,11 @@ def kmeans_005():
             images = train_x_crop_scale.transform()
             if incl:
                 test_images = test_x_crop_scale.transform()
-                images = np.vstack(images, test_images)
+                images = np.vstack([images, test_images])
+            logger.info("Images ndarray shape: {}".format(images.shape))
 
             patches = patch_extractor.transform(images)
+            logger.info("Patches ndarray shape: {}".format(patches.shape))
 
             kmeans_generator.fit(patches)
 
@@ -570,6 +586,9 @@ def kmeans_005():
             wrapper.cross_validation(train_x, train_y, n_folds=2, parallel_estimator=True)
             del wrapper
             gc.collect()
+            score = (n_patches, incl, wrapper.cv_scores)
+            logger.info("Score: {}".format(score))
+            scores.append(score)
 
 
 def kmeans_006():

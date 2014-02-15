@@ -494,8 +494,8 @@ def _process_batches(X, start, end, batch_size, centroids, c2, x2, k):
         loss += np.sum((0.5 * x2[i:last_index]) - val.T)
 
         # Don't use a sparse matrix here
-        S = np.zeros((batch_size, k))
-        S[range(batch_size), indices] = 1
+        S = np.zeros((m, k))
+        S[range(m), indices] = 1
 
         # shape (k, n_pixels)
         this_sum = np.dot(S.T, X[i:last_index, :])
