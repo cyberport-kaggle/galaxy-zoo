@@ -590,15 +590,21 @@ class CropScaleImageTransformer(BaseEstimator, TransformerMixin):
     scaled_size: integer
         Pixel lenggh to scale
     """
-    def __init__(self, training, result_path, crop_size, scaled_size, n_jobs=1, force_rerun=False, verbose=3, memmap=False):
+    def __init__(self, training, crop_size, scaled_size, result_path=None, n_jobs=1, force_rerun=False, verbose=3, memmap=False):
         self.training = training
-        self.result_path = result_path
         self.crop_size = crop_size
         self.scaled_size = scaled_size
         self.verbose = verbose
         self.n_jobs = (multiprocessing.cpu_count() + n_jobs + 1) if n_jobs <= -1 else n_jobs
         self.force_rerun = force_rerun
         self.memmap = memmap
+        self.result_path = result_path or self._get_result_path()
+
+    def _get_result_path(self):
+        if self.training:
+            return 'data/img_train_c{}_s{}.npy'.format(self.crop_size, self.scaled_size)
+        else:
+            return 'data/img_test_c{}_s{}.npy'.format(self.crop_size, self.scaled_size)
 
     def fit(self, X=None, y=None):
         return self
