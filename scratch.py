@@ -253,4 +253,4 @@ kmeans_generator = KMeansFeatureGenerator(n_centroids=10,
                                           n_jobs=1)
 
 kmeans_generator.fit(a)
-train_reds = kmeans_generator.transform(reds)
+train_reds = kmeans_generator.transform(reds, stride_size=2)

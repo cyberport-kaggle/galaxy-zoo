@@ -263,7 +263,7 @@ def normalize(x):
     return temp1 / temp2
 
 
-def chunked_extract_features(idx, X, rf_size, centroids, mean, p, whitening=True):
+def chunked_extract_features(idx, X, rf_size, centroids, mean, p, whitening=True, stride_size=1):
     """
     Receives a list of image indices to extract features from
 
@@ -291,14 +291,16 @@ def chunked_extract_features(idx, X, rf_size, centroids, mean, p, whitening=True
         # Shape of (n_images, x, y, [channel]).  Channel may not be present
         if X.ndim == 4 and X.shape[3] == 3:
             this_x = X[img_idx]
-            patches = np.vstack((rolling_block(this_x[:, :, 0], rf_size),
-                             rolling_block(this_x[:, :, 1], rf_size),
-                             rolling_block(this_x[:, :, 2], rf_size))).T
+            patches = np.vstack((rolling_block(this_x[:, :, 0], rf_size, stride_size),
+                             rolling_block(this_x[:, :, 1], rf_size, stride_size),
+                             rolling_block(this_x[:, :, 2], rf_size, stride_size)))
         elif X.ndim == 3:
             this_x = X[img_idx]
-            patches = np.vstack(rolling_block(this_x[:, :], rf_size)).T
+            patches = np.vstack(rolling_block(this_x, rf_size, stride_size))
         else:
             raise RuntimeError("Unexpected image dimensions: {}".format(X.shape))
+
+        print patches.shape
 
         # normalize for contrast
         patches = normalize(patches)
@@ -306,6 +308,7 @@ def chunked_extract_features(idx, X, rf_size, centroids, mean, p, whitening=True
         if whitening:
             patches = np.dot(patches - mean, p)
 
+        # Normalizing
         xx = np.sum(patches ** 2, 1, keepdims=True)
         cc = np.sum(centroids ** 2, 1, keepdims=True).T
         xc = np.dot(patches, centroids.T)
@@ -314,11 +317,11 @@ def chunked_extract_features(idx, X, rf_size, centroids, mean, p, whitening=True
         mu = z.mean(1, keepdims=True)
         patches = np.maximum(mu - z, 0)
 
-        prows = this_x.shape[0] - rf_size + 1
-        pcols = this_x.shape[0] - rf_size + 1
+        prows = pcols = int((this_x.shape[0] - rf_size) / stride_size) + 1
         num_centroids = centroids.shape[0]
         patches = patches.reshape((prows, pcols, num_centroids))
 
+        # Pooling
         halfr = int(np.rint(prows / 2))
         halfc = int(np.rint(pcols / 2))
         q1 = np.sum(patches[0:halfr, 0:halfc, :], (0, 1))
@@ -332,16 +335,35 @@ def chunked_extract_features(idx, X, rf_size, centroids, mean, p, whitening=True
     return np.vstack(res)
 
 
-def rolling_block(A, block_size):
+def rolling_block(A, block_size, stride_size=1):
     """
     Gets a rolling window on A in a square with side length block_size
     Uses the stride trick
+
+    Arguments:
+    ----------
+    A: square ndarray
+
+    block_size: int
+        Size of the rolling window
+
+    stride_size: int
+        Step size for each window shift
+
+    Returns:
+    ndarray of dimension (n_windows ** 2, block_size ** 2)
+    --------
     """
+    # Calculate how many windows we can get given the stride size
+    n_windows = int((A.shape[0] - block_size) / stride_size) + 1
+    # not sure why this works, but it seems to work.  int floors it.
+
     block = (block_size, block_size)
-    shape = (A.shape[0] - block[0] + 1, A.shape[1] - block[1] + 1) + block
-    strides = (A.strides[0], A.strides[1]) + A.strides
+    shape = (n_windows, n_windows) + block
+    strides = (A.strides[0] * stride_size, A.strides[1] * stride_size) + A.strides
     res = np.copy(as_strided(A, shape=shape, strides=strides))
-    res = res.reshape(shape[0] * shape[1], shape[2] * shape[3]).T
+    res = res.reshape(shape[0] * shape[1], shape[2] * shape[3])
+    print res.shape
     return res
 
 
@@ -587,7 +609,7 @@ class KMeansFeatureGenerator(BaseEstimator, TransformerMixin):
             self.save_to_file()
         return self
 
-    def transform(self, X, save_to_file=None, memmap=False, force_rerun=False):
+    def transform(self, X, stride_size=1, save_to_file=None, memmap=False, force_rerun=False):
         """
         Expects X to be in the shape of (n, x, y, chan)
         """
@@ -605,7 +627,7 @@ class KMeansFeatureGenerator(BaseEstimator, TransformerMixin):
             chunked_rows = list(chunks(all_rows, self.n_jobs))
             logger.info("Transforming in {} jobs, chunk sizes: {}".format(self.n_jobs, [len(x) for x in chunked_rows]))
             res = Parallel(n_jobs=self.n_jobs, verbose=self.verbose)(
-                delayed(chunked_extract_features)(i, X, self.rf_size, self.centroids_, self.mean_, self.p_, True) for i in chunked_rows
+                delayed(chunked_extract_features)(i, X, self.rf_size, self.centroids_, self.mean_, self.p_, True, stride_size) for i in chunked_rows
             )
             res = np.vstack(res)
             if save_to_file is not None:
