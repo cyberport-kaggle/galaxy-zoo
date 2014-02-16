@@ -244,6 +244,14 @@ patch_extractor = models.KMeansFeatures.PatchSampler(n_patches=10000,
                                                      patch_size=5,
                                                      n_jobs=2)
 
+reds_copy = np.copy(raw_images[0:1000, :, :, 1])
+a = patch_extractor.transform(reds_copy)
+
+# Some weirdness going on here.  The raw_images memmap gets corrupted by the parallel job, but only under these conditions:
+# - It is sliced along the last dimension.  Slices along first dimension appear to be OK
+# - It is a memmap
+
+# If the memmap is copied or not sliced along the last dimension, then it's fine.
 reds = raw_images[0:1000, :, :, 1]
 a = patch_extractor.transform(reds)
 
