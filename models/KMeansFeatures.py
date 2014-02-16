@@ -300,7 +300,6 @@ def chunked_extract_features(idx, X, rf_size, centroids, mean, p, whitening=True
         else:
             raise RuntimeError("Unexpected image dimensions: {}".format(X.shape))
 
-        print patches.shape
 
         # normalize for contrast
         patches = normalize(patches)
@@ -363,7 +362,6 @@ def rolling_block(A, block_size, stride_size=1):
     strides = (A.strides[0] * stride_size, A.strides[1] * stride_size) + A.strides
     res = np.copy(as_strided(A, shape=shape, strides=strides))
     res = res.reshape(shape[0] * shape[1], shape[2] * shape[3])
-    print res.shape
     return res
 
 
