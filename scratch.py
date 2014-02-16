@@ -229,6 +229,7 @@ b.run('train')
 import models
 from models.Base import CropScaleImageTransformer
 from models.KMeansFeatures import KMeansFeatureGenerator
+import numpy as np
 
 train_x_crop_scale = CropScaleImageTransformer(training=True,
                                                # result_path='data/data_train_crop_150_scale_15.npy',
@@ -239,18 +240,33 @@ train_x_crop_scale = CropScaleImageTransformer(training=True,
 
 raw_images = train_x_crop_scale.transform()
 
-patch_extractor = models.KMeansFeatures.PatchSampler(n_patches=1000,
+patch_extractor = models.KMeansFeatures.PatchSampler(n_patches=10000,
                                                      patch_size=5,
-                                                     n_jobs=-1)
+                                                     n_jobs=2)
 
-reds = raw_images[0:100, :, :, 0]
+reds = raw_images[0:1000, :, :, 1]
 a = patch_extractor.transform(reds)
 
-kmeans_generator = KMeansFeatureGenerator(n_centroids=10,
+
+kmeans_generator = KMeansFeatureGenerator(n_centroids=100,
                                           rf_size=5,
                                           result_path='foo.npy',
                                           n_iterations=20,
                                           n_jobs=1)
 
 kmeans_generator.fit(a)
-train_reds = kmeans_generator.transform(reds, stride_size=2)
+train_reds_1 = kmeans_generator.transform(reds, stride_size=1)
+train_reds_2 = kmeans_generator.transform(reds, stride_size=2)
+
+
+
+
+import numpy as np
+from joblib import Parallel, delayed
+
+def randomness(i):
+    return np.random.rand(250).reshape(10, 5, 5)
+
+res = Parallel(n_jobs=1, verbose=3)(
+    delayed(randomness)(i) for i in range(4)
+)

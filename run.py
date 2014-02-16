@@ -728,6 +728,18 @@ def kmeans_006_submission():
 
 def kmeans_007():
     """
+    Increasing crop/scale size, rf size, centroids, and patches all at once.
+    """
+    n_centroids = 5000
+    s = 50
+    crop = 200
+    n_patches = 400000
+    rf_size = 20
+    stride = 2
+
+
+def kmeans_008():
+    """
     Kmeans on each RGB layer separately.
 
     Coates' paper suggests that if the input data can be split into independent chunks, then we should do so.

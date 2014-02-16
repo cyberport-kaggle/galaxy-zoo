@@ -41,24 +41,30 @@ def chunked_extract_patch(patch_nums, train_mmap, patch_size):
 
     """
     # Filter out any Nones that might have been passed in
+    print "Extracting patches"
     patch_nums = [x for x in patch_nums if x is not None]
     res = [None] * len(patch_nums)
     # train_mmap is of dimensions (n_training, image_rows, image_cols, [channels])
     n_images = train_mmap.shape[0]
     image_rows = train_mmap.shape[1]
     image_cols = train_mmap.shape[2]
+    print "enumerating"
 
     for i, p in enumerate(patch_nums):
+        print i, p
         # Randomly get an offset
         row = np.random.randint(image_rows - patch_size + 1)
         col = np.random.randint(image_cols - patch_size + 1)
 
         # Pick the right image and extract the patch
         img = train_mmap[p % n_images]
+        print img.shape
         patch = img[row:row + patch_size, col:col + patch_size]
+        print patch
         res[i] = patch.flatten()
 
-    return np.vstack(res)
+    res = np.vstack(res)
+    return res
 
 
 class KMeansFeatures(object):
@@ -284,8 +290,10 @@ def chunked_extract_features(idx, X, rf_size, centroids, mean, p, whitening=True
     """
     idx = [y for y in idx if y is not None]
     res = [None] * len(idx)
+    prows = pcols = int((X.shape[1] - rf_size) / stride_size) + 1
+    print "prows: ", prows
     for i, img_idx in enumerate(idx):
-        if (i + 1) % 10 == 0:
+        if (i + 1) % 1000 == 0:
             logger.info("Extracting features on image {} / {}".format(i + 1, len(idx)))
 
         # Shape of (n_images, x, y, [channel]).  Channel may not be present
@@ -301,22 +309,22 @@ def chunked_extract_features(idx, X, rf_size, centroids, mean, p, whitening=True
             raise RuntimeError("Unexpected image dimensions: {}".format(X.shape))
 
 
+        # Patches shape is (n_windows, rf_size * rf_size)
         # normalize for contrast
         patches = normalize(patches)
 
         if whitening:
             patches = np.dot(patches - mean, p)
 
-        # Normalizing
         xx = np.sum(patches ** 2, 1, keepdims=True)
         cc = np.sum(centroids ** 2, 1, keepdims=True).T
         xc = np.dot(patches, centroids.T)
 
+        # Normalizing
         z = np.sqrt(cc + (xx - 2 * xc))
         mu = z.mean(1, keepdims=True)
         patches = np.maximum(mu - z, 0)
 
-        prows = pcols = int((this_x.shape[0] - rf_size) / stride_size) + 1
         num_centroids = centroids.shape[0]
         patches = patches.reshape((prows, pcols, num_centroids))
 
@@ -667,3 +675,38 @@ class KMeansFeatureGenerator(BaseEstimator, TransformerMixin):
         p_path = self.result_path + '_p.npy'
         logger.info("Loading p from {}".format(p_path))
         self.p_ = np.load(p_path)
+
+
+class DependencyTestTransformer(BaseEstimator, TransformerMixin):
+    """
+    Given an ndarray of dimension (n_images, n_features), use a dependency test to sample the features for "patches"
+    to input into a next layer for kmeans feature generation
+    """
+    def __init__(self, n_patches, rf_size, n_jobs=1):
+        # Typically rf_size is taken to be 200 -- i.e. group the top 200 most similar features into one receptive field
+        self.n_patches = n_patches
+        self.rf_size = rf_size
+        self.n_jobs = n_jobs
+
+    def fit(self, X=None, y=None):
+        return self
+
+    def transform(self, X):
+        """
+        Features in X should be normalized
+
+        Randomly select the features in X that will be the seed features
+        For each feature (column of X) f
+          For each seed feature s
+              Pairwise whiten s and f
+              Compute the square correlation of s and f
+
+        Formula for the correlations:
+            alpha = correlation between features
+            beta = (1 - alpha) ** (-1/2)
+            gamma = (1 + alpha) ** (-1/2)
+            xhat_j_i = 1/2 * ((gamma + beta) * x_j_i + (gamma - beta) * x_k_i)
+            xhat_k_i = 1/2 * ((gamma - beta) * x_j_i + (gamma + beta) * x_k_i)
+            S_j_k = (sum over i (xhat_j_i ** 2 * xhat_k_i ** 2 - 1)) / sqrt(sum over i (xhat_j_i ** 4 - 1) * sum over i (xhat_k_i ** 4 - 1))
+        """
+        pass
