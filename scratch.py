@@ -272,6 +272,8 @@ train_reds_2 = kmeans_generator.transform(reds, stride_size=2)
 import numpy as np
 from joblib import Parallel, delayed
 
+test_ndarray = np.random.random_integers(0, 3)
+
 def randomness(i):
     return np.random.rand(250).reshape(10, 5, 5)
 
