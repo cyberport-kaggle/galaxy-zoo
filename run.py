@@ -728,6 +728,67 @@ def kmeans_006_submission():
 
 def kmeans_007():
     """
+    Increasing crop/scale size, rf size, centroids, and patches all at once.
+    """
+    n_centroids = 5000
+    s = 50
+    crop = 200
+    # Originally, 1600 centroids for 400,000 patches, or 250 patches per centroid
+    # 800000 / 5000 = will give us 160 patches per centroid
+    n_patches = 800000
+    rf_size = 20
+    # 31 x 31 = 961 patches per image, which is 10x more patches than the original settings
+    # If we set stride 2, then it's 16 x 16 patches = 256, only twice as many patches
+    stride = 2
+    train_x_crop_scale = CropScaleImageTransformer(training=True,
+                                                   crop_size=crop,
+                                                   scaled_size=s,
+                                                   n_jobs=-1,
+                                                   memmap=True)
+    images = train_x_crop_scale.transform()
+    patch_extractor = models.KMeansFeatures.PatchSampler(n_patches=n_patches,
+                                                         patch_size=rf_size,
+                                                         n_jobs=-1)
+    patches = patch_extractor.transform(images)
+
+    kmeans_generator = KMeansFeatureGenerator(n_centroids=n_centroids,
+                                              rf_size=rf_size,
+                                              result_path='data/mdl_kmeans_007'.format(n_centroids),
+                                              n_iterations=20,
+                                              n_jobs=-1,)
+    kmeans_generator.fit(patches)
+
+    del patches
+    gc.collect()
+
+    train_x = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_007.npy'.format(n_centroids), stride_size=stride, memmap=True)
+    train_y = classes.train_solutions.data
+    # Unload some objects
+    del images
+    gc.collect()
+
+    wrapper = ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 500, 'n_estimators': 250}, n_jobs=-1)
+    wrapper.cross_validation(train_x, train_y, parallel_estimator=True)
+
+    """
+    wrapper.fit(train_x, train_y)
+
+    test_x_crop_scale = CropScaleImageTransformer(training=False,
+                                                  crop_size=crop,
+                                                  scaled_size=s,
+                                                  n_jobs=-1,
+                                                  memmap=True)
+
+    test_images = test_x_crop_scale.transform()
+    test_x = kmeans_generator.transform(test_images, save_to_file='data/data_test_kmeans_features_007.npy'.format(n_centroids), memmap=True)
+    res = wrapper.predict(test_x)
+    sub = classes.Submission(res)
+    sub.to_file('sub_kmeans_006.csv')
+    """
+
+
+def kmeans_008():
+    """
     Kmeans on each RGB layer separately.
 
     Coates' paper suggests that if the input data can be split into independent chunks, then we should do so.
