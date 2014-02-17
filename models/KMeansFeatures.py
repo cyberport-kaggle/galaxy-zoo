@@ -285,7 +285,7 @@ def chunked_extract_features(idx, X, rf_size, centroids, mean, p, whitening=True
     idx = [y for y in idx if y is not None]
     res = [None] * len(idx)
     for i, img_idx in enumerate(idx):
-        if (i + 1) % 10 == 0:
+        if (i + 1) % 1000 == 0:
             logger.info("Extracting features on image {} / {}".format(i + 1, len(idx)))
 
         # Shape of (n_images, x, y, [channel]).  Channel may not be present
