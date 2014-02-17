@@ -267,16 +267,71 @@ train_reds_1 = kmeans_generator.transform(reds, stride_size=1)
 train_reds_2 = kmeans_generator.transform(reds, stride_size=2)
 
 
+"""
+Test cases for parallelization issues when slicing memmaps by certain dimension
+"""
 
-
+from __future__ import division
 import numpy as np
 from joblib import Parallel, delayed
+import joblib
 
-test_ndarray = np.random.random_integers(0, 3)
+TMP_PATH = 'tmp_test.npy'
+test_ndarray = np.random.random_integers(0, 3, 1000 * 15 * 15 * 3).reshape(1000, 15, 15, 3) / 4
+# This sized array seems to be OK when you index on the second dimension
+# test_ndarray = np.random.random_integers(0, 3, 15 * 15).reshape(15, 15) / 4
+# This array is not OK when you index on the second dimension
+# test_ndarray = np.random.random_integers(0, 3, 15 * 15 * 3).reshape(15, 15, 3) / 4
 
-def randomness(i):
-    return np.random.rand(250).reshape(10, 5, 5)
+# Create the memmap
+_ = joblib.dump(test_ndarray, TMP_PATH)
+test_memmap = joblib.load(TMP_PATH, mmap_mode='r+')
 
-res = Parallel(n_jobs=1, verbose=3)(
-    delayed(randomness)(i) for i in range(4)
+# Create a copy to compare against
+base_copy = np.copy(test_ndarray)
+
+def do_something(X, y):
+    print X[0]
+    assert np.all(y == X)
+
+N_CORES = 2
+
+# This works
+res = Parallel(n_jobs=N_CORES, verbose=3)(
+    delayed(do_something)(test_ndarray, base_copy) for i in range(N_CORES)
+)
+
+# This also works
+res = Parallel(n_jobs=N_CORES, verbose=3)(
+    delayed(do_something)(test_memmap, base_copy) for i in range(N_CORES)
+)
+
+# Selecting on the last index
+res = Parallel(n_jobs=N_CORES, verbose=3)(
+    delayed(do_something)(test_ndarray[:, :, :, 0], base_copy[:, :, :, 0]) for i in range(N_CORES)
+)
+
+# This reliably hangs.  In my actual application, it also appears to corrupt the data in the memmap that is passed in
+# Values that originally look like 1.75 in the array end up as large exponentials or NaNs when I print inside the parallelized function
+N_CORES = 2
+res = Parallel(n_jobs=N_CORES, verbose=3)(
+    delayed(do_something)(test_memmap[:, :, :, 0], base_copy[:, :, :, 0]) for i in range(N_CORES)
+)
+
+# This also hangs
+N_CORES = 2
+res = Parallel(n_jobs=N_CORES, verbose=3)(
+    delayed(do_something)(test_memmap[:, 0:10], base_copy[:, 0:10]) for i in range(N_CORES)
+)
+
+# But if you turn the n_jobs to 1, even with the memmap slice, it again works fine.
+N_CORES = 1
+res = Parallel(n_jobs=N_CORES, verbose=3)(
+    delayed(do_something)(test_memmap[:, :, :, 0], base_copy[:, :, :, 0]) for i in range(N_CORES)
+)
+
+# Also slicing by the first dimension seems to be OK
+N_CORES = 2
+res = Parallel(n_jobs=N_CORES, verbose=3)(
+    delayed(do_something)(test_memmap[1:10], base_copy[1:10]) for i in range(N_CORES)
 )
