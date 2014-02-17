@@ -761,7 +761,7 @@ def kmeans_007():
     del patches
     gc.collect()
 
-    train_x = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_007.npy'.format(n_centroids), stride_size=stride, memmap=True)
+    train_x = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_007.npy', stride_size=stride, memmap=True)
     train_y = classes.train_solutions.data
     # Unload some objects
     del images

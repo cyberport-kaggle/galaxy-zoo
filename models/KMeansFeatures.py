@@ -291,16 +291,18 @@ def chunked_extract_features(idx, X, rf_size, centroids, mean, p, whitening=True
         # Shape of (n_images, x, y, [channel]).  Channel may not be present
         if X.ndim == 4 and X.shape[3] == 3:
             this_x = X[img_idx]
-            patches = np.vstack((rolling_block(this_x[:, :, 0], rf_size, stride_size),
+            patches = np.hstack((rolling_block(this_x[:, :, 0], rf_size, stride_size),
                              rolling_block(this_x[:, :, 1], rf_size, stride_size),
                              rolling_block(this_x[:, :, 2], rf_size, stride_size)))
         elif X.ndim == 3:
             this_x = X[img_idx]
+            # Vstack is just to convert the memmap to an in-memory ndarray
             patches = np.vstack(rolling_block(this_x, rf_size, stride_size))
         else:
             raise RuntimeError("Unexpected image dimensions: {}".format(X.shape))
 
 
+        # Patches shape should be n_windows ** 2, rf_size ** 2 * 3
         # normalize for contrast
         patches = normalize(patches)
 
