@@ -729,6 +729,9 @@ def kmeans_006_submission():
 def kmeans_007():
     """
     Increasing crop/scale size, rf size, centroids, and patches all at once.
+
+    2014-02-18 02:45:15 - Base - INFO - Cross validation completed in 5426.04788399.  Scores:
+    2014-02-18 02:45:15 - Base - INFO - [-0.10834319 -0.10825868]
     """
     n_centroids = 5000
     s = 50
