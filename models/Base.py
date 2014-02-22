@@ -645,6 +645,63 @@ class CropScaleImageTransformer(BaseEstimator, TransformerMixin):
             return res
 
 
+class SampleTransformer(BaseEstimator, TransformerMixin):
+    """
+    Pixel sampling
+    """
+    def __init__(self, training, steps, step_size, n_jobs=1, verbose=3, force_rerun=False, memmap=False):
+        self.training = training
+        self.steps = steps
+        self.step_size = step_size
+        self.n_jobs = (multiprocessing.cpu_count() + n_jobs + 1) if n_jobs <= -1 else n_jobs
+        self.verbose = verbose
+        self.result_path = self._get_result_path()
+        self.force_rerun = force_rerun
+        self.memmap = memmap
+
+    def _get_result_path(self):
+        if self.training:
+            return 'data/img_train_pixel_size{}_steps{}.npy'.format(self.steps, self.step_size)
+        else:
+            return 'data/img_test_pixel_size{}_steps{}.npy'.format(self.steps, self.step_size)
+
+    def transform(self, X=None):
+        if self.training:
+            files = train_solutions.filenames
+        else:
+            files = sorted(os.listdir(TEST_IMAGE_PATH))
+
+        if os.path.exists(self.result_path) and not self.force_rerun:
+            logger.info("File already exists.  Loading from {}".format(self.result_path))
+            if self.memmap:
+                return joblib.load(self.result_path, mmap_mode='r+')
+            else:
+                return joblib.load(self.result_path)
+        else:
+            logger.info("Sampling pixels from image, {} steps of size {}".format(self.steps, self.step_size))
+            res = np.vstack(Parallel(n_jobs=self.n_jobs, verbose=self.verbose)(
+                delayed(_parallel_sampler)(files, self.steps, self.step_size, self.training) for files in chunks(files, self.n_jobs)
+            ))
+            logger.info("Saving results to file {}".format(self.result_path))
+            joblib.dump(res, self.result_path)
+            if self.memmap:
+                res = joblib.load(self.result_path, mmap_mode='r+')
+            return res
+
+
+def _parallel_sampler(file_list, steps, step_size, training):
+    filepath = TRAIN_IMAGE_PATH if training else TEST_IMAGE_PATH
+    rows = []
+    counter = 0
+    for i, f in enumerate(file_list):
+        counter += 1
+        if counter % 5000 == 0:
+            logger.info("Processed {} images".format(counter))
+        image = RawImage(os.path.join(filepath, f))
+        rows.append(image.grid_sample(step_size, steps).flatten().astype('float64') / 255)
+    return np.vstack(rows)
+
+
 def _parallel_crop_scale(transformer, file_list):
     return transformer._transform(file_list)
 

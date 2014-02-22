@@ -13,11 +13,11 @@ import numpy as np
 import logging
 from constants import *
 import models
-from sklearn.cross_validation import KFold
+from sklearn.cross_validation import KFold, train_test_split
 from IPython import embed
 import cPickle as pickle
 import time
-from models.Base import CropScaleImageTransformer, ModelWrapper
+from models.Base import CropScaleImageTransformer, ModelWrapper, SampleTransformer
 from models.KMeansFeatures import KMeansFeatureGenerator
 
 
@@ -790,14 +790,63 @@ def kmeans_007():
     """
 
 
-def kmeans_008():
+def ensemble_001():
     """
-    Kmeans on each RGB layer separately.
+    Ensemble of kmeans and random forest results
+    Conducting some analysis of whether the errors from these two models for individual Ys are different
+    """
+    n_centroids = 3000
+    s = 15
+    crop = 150
+    n_patches = 400000
+    rf_size = 5
 
-    Coates' paper suggests that if the input data can be split into independent chunks, then we should do so.
-    This reduces the input dataset dimensionality by a factor of 3, so maybe also allows us to increase the RF size or scale size
-    """
-    pass
+    train_x_crop_scale = CropScaleImageTransformer(training=True,
+                                                   crop_size=crop,
+                                                   scaled_size=s,
+                                                   n_jobs=-1,
+                                                   memmap=True)
+
+    kmeans_generator = KMeansFeatureGenerator(n_centroids=n_centroids,
+                                              rf_size=rf_size,
+                                              result_path='data/mdl_ensemble_001',
+                                              n_iterations=20,
+                                              n_jobs=-1,)
+
+    patch_extractor = models.KMeansFeatures.PatchSampler(n_patches=n_patches,
+                                                         patch_size=rf_size,
+                                                         n_jobs=-1)
+    images = train_x_crop_scale.transform()
+    patches = patch_extractor.transform(images)
+
+    kmeans_generator.fit(patches)
+
+    del patches
+    gc.collect()
+
+    X = kmeans_generator.transform(images, save_to_file='data/data_ensemble_001.npy'.format(n_centroids), memmap=True)
+    Y = classes.train_solutions.data
+
+    # Unload some objects
+    del images
+    gc.collect()
+
+    # Get the input for the RF so that we can split together
+    sampler = SampleTransformer(training=True, steps=2, step_size=20, n_jobs=-1)
+    pX = sampler.transform()
+
+    # manual split of train and test
+    train_x, test_x, ptrain_x, ptest_x, train_y, test_y = train_test_split([X, pX, Y], test_size=0.5)
+
+    wrapper = ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 500, 'n_estimators': 500}, n_jobs=-1)
+    wrapper.fit(train_x, train_y)
+    kmeans_preds = wrapper.predict(test_x)
+
+    pWrapper = ModelWrapper(RandomForestRegressor, {'n_estimators': 500}, n_jobs=-1)
+    pWrapper.fit(ptrain_x, train_y)
+    pixel_preds = pWrapper.predict(ptest_x)
+
+
 
 
 def kmeans_centroids(fit_centroids=False):
