@@ -824,7 +824,7 @@ def ensemble_001():
     del patches
     gc.collect()
 
-    X = kmeans_generator.transform(images, save_to_file='data/data_ensemble_001.npy'.format(n_centroids), memmap=True)
+    X = kmeans_generator.transform(images, save_to_file='data/data_ensemble_001.npy', memmap=True)
     Y = classes.train_solutions.data
 
     # Unload some objects
@@ -846,7 +846,20 @@ def ensemble_001():
     pWrapper.fit(ptrain_x, train_y)
     pixel_preds = pWrapper.predict(ptest_x)
 
+    logger.info('Kmeans')
+    classes.colwise_rmse(kmeans_preds, test_y)
+    classes.rmse(kmeans_preds, test_y)
+    logger.info('Pixel RF')
+    classes.colwise_rmse(pixel_preds, test_y)
+    classes.rmse(pixel_preds, test_y)
 
+    logger.info("Ensembling predictions")
+    etrain_x = np.hstack((wrapper.predict(train_x), pWrapper.predict(ptrain_x)))
+    etest_x = np.hstack((kmeans_preds, pixel_preds))
+    eWrapper = ModelWrapper(RandomForestRegressor, {'n_estimators': 500}, n_jobs=-1)
+    eWrapper.fit(etrain_x, train_y)
+    ensemble_preds = eWrapper.predict(etest_x)
+    classes.rmse(ensemble_preds, test_y)
 
 
 def kmeans_centroids(fit_centroids=False):
