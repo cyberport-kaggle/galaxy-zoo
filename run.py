@@ -794,6 +794,10 @@ def ensemble_001():
     """
     Ensemble of kmeans and random forest results
     Conducting some analysis of whether the errors from these two models for individual Ys are different
+
+    Ensembled error is .1149.
+
+    Kmeans is better on every class than RF.
     """
     n_centroids = 3000
     s = 15
@@ -836,13 +840,13 @@ def ensemble_001():
     pX = sampler.transform()
 
     # manual split of train and test
-    train_x, test_x, ptrain_x, ptest_x, train_y, test_y = train_test_split([X, pX, Y], test_size=0.5)
+    train_x, test_x, ptrain_x, ptest_x, train_y, test_y = train_test_split(X, pX, Y, test_size=0.5)
 
     wrapper = ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 500, 'n_estimators': 500}, n_jobs=-1)
     wrapper.fit(train_x, train_y)
     kmeans_preds = wrapper.predict(test_x)
 
-    pWrapper = ModelWrapper(RandomForestRegressor, {'n_estimators': 500}, n_jobs=-1)
+    pWrapper = ModelWrapper(RandomForestRegressor, {'n_estimators': 500, 'verbose': 3}, n_jobs=-1)
     pWrapper.fit(ptrain_x, train_y)
     pixel_preds = pWrapper.predict(ptest_x)
 
@@ -856,9 +860,10 @@ def ensemble_001():
     logger.info("Ensembling predictions")
     etrain_x = np.hstack((wrapper.predict(train_x), pWrapper.predict(ptrain_x)))
     etest_x = np.hstack((kmeans_preds, pixel_preds))
-    eWrapper = ModelWrapper(RandomForestRegressor, {'n_estimators': 500}, n_jobs=-1)
+    eWrapper = ModelWrapper(RandomForestRegressor, {'n_estimators': 500, 'verbose': 3}, n_jobs=-1)
     eWrapper.fit(etrain_x, train_y)
     ensemble_preds = eWrapper.predict(etest_x)
+    classes.colwise_rmse(ensemble_preds, test_y)
     classes.rmse(ensemble_preds, test_y)
 
 
