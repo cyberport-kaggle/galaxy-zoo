@@ -6,10 +6,12 @@ from __future__ import division
 from functools import wraps
 import os
 import math
+import joblib
 
 from scipy import misc
 import numpy as np
 from matplotlib import pyplot
+from sklearn.externals.joblib import Parallel, delayed
 from sklearn.metrics import mean_squared_error, make_scorer
 from skimage.transform import rescale
 from constants import *
@@ -379,3 +381,40 @@ def chunks(l, n):
 
     for i in xrange(0, len(l), chunk_size):
         yield l[i:i+chunk_size]
+
+
+class ImageIteratorMixin(object):
+    """
+    Common method to iterate over every image and apply some function to it.
+    Classes that inherit from this need to implement _transform, which accepts a single argument
+    that is a list of file names it should iterate over
+    """
+    def transform(self, X=None):
+        if self.training:
+            files = train_solutions.filenames
+        else:
+            files = sorted(os.listdir(TEST_IMAGE_PATH))
+
+        if os.path.exists(self.result_path) and not self.force_rerun:
+            logger.info("File already exists.  Loading from {}".format(self.result_path))
+            if self.memmap:
+                return joblib.load(self.result_path, mmap_mode='r+')
+            else:
+                return joblib.load(self.result_path)
+        else:
+            res = np.vstack(Parallel(n_jobs=self.n_jobs, verbose=self.verbose)(
+                delayed(_parallel_wrapper)(self, files) for files in chunks(files, self.n_jobs)
+            ))
+            logger.info("Saving results to file {}".format(self.result_path))
+            joblib.dump(res, self.result_path)
+            if self.memmap:
+                res = joblib.load(self.result_path, mmap_mode='r+')
+            return res
+
+
+def _parallel_wrapper(transformer, file_list):
+    """
+    Need this because delayed cannot wrap instance methods (I think)
+    """
+    return transformer._transform(file_list)
+
