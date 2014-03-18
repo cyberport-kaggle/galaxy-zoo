@@ -74,36 +74,18 @@ def kmeans_006():
         gc.collect()
 
 
-def train_kmeans_generator():
-    n_centroids = 3000
-    s = 15
-    crop = 150
-    n_patches = 400000
-    rf_size = 5
-    patch_extractor = models.KMeansFeatures.PatchSampler(n_patches=n_patches,
-                                                         patch_size=rf_size,
-                                                         n_jobs=-1)
-    images = train_x_crop_scale.transform()
-    patches = patch_extractor.transform(images)
-    kmeans_generator.fit(patches)
-    return kmeans_generator
-
-
-def kmeans_006_submission():
-    # Final submission
-    n_centroids = 3000
-    s = 15
-    crop = 150
-    n_patches = 400000
-    rf_size = 5
-    logger.info("Training with n_centroids {}".format(n_centroids))
-
+def get_images(crop=150, s=15):
     train_x_crop_scale = CropScaleImageTransformer(training=True,
                                                    result_path='data/data_train_crop_{}_scale_{}.npy'.format(crop, s),
                                                    crop_size=crop,
                                                    scaled_size=s,
                                                    n_jobs=-1,
                                                    memmap=True)
+    images = train_x_crop_scale.transform()
+    return images
+
+
+def train_kmeans_generator(images, n_centroids=3000, n_patches=400000, rf_size=5):
 
     kmeans_generator = KMeansFeatureGenerator(n_centroids=n_centroids,
                                               rf_size=rf_size,
@@ -111,20 +93,27 @@ def kmeans_006_submission():
                                               n_iterations=20,
                                               n_jobs=-1,)
 
+
     patch_extractor = models.KMeansFeatures.PatchSampler(n_patches=n_patches,
                                                          patch_size=rf_size,
                                                          n_jobs=-1)
-    images = train_x_crop_scale.transform()
-
     patches = patch_extractor.transform(images)
-
     kmeans_generator.fit(patches)
+    return kmeans_generator
 
-    del patches
-    gc.collect()
 
+def kmeans_006_submission():
+    # Final submission
+    crop = 150
+    s = 15
+    n_centroids = 3000
+
+    images = get_images(crop=crop, s=s)
+    kmeans_generator = train_kmeans_generator(images, n_centroids=n_centroids)
     train_x = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_006_centroids_{}.npy'.format(n_centroids), memmap=True)
+
     train_y = classes.train_solutions.data
+
     # Unload some objects
     del images
     gc.collect()
