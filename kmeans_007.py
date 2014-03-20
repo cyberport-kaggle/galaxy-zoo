@@ -3,8 +3,11 @@ Trying some other estimators besides Ridge
 """
 
 import gc
+from sklearn.decomposition import RandomizedPCA
 from sklearn.ensemble import GradientBoostingRegressor
 import numpy as np
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.svm import SVR
 from classes import logger
 import classes
 import models
@@ -54,8 +57,14 @@ def gradient_boosting_grid_search():
     # Unload some objects
     del images
     gc.collect()
-    # We'll focus on the columns that have high errors based on the analysis in kmeans_006.py
 
+    # This took maybe 30 minutes to run, 1200 components gives .9999999 variance explained.  Can maybe get
+    # away with 200 - .9937
+    pca = RandomizedPCA(n_components=200)
+    pca.fit(train_x)
+    pca_train_x = pca.transform(train_x)
+
+    # We'll focus on the columns that have high errors based on the analysis in kmeans_006.py
     params = {
         'loss': ['ls', 'lad', 'huber', 'quantile'],
         'learning_rate': [0.01, 0.1, 1, 5, 10],
@@ -63,7 +72,6 @@ def gradient_boosting_grid_search():
         'max_depth': [2, 3, 5, 10],
         'subsample': [0.2, 0.5, 1]
     }
-    wrapper = ModelWrapper(GradientBoostingRegressor, {'verbose':1}, n_jobs=1)
     # not sure why it just dies here, on CV too
     #   File "/usr/lib/python2.7/multiprocessing/pool.py", line 319, in _handle_tasks
     # put(task)
@@ -73,4 +81,16 @@ def gradient_boosting_grid_search():
     # Without parallelization, will run, but is super slow, probably because of the high dimensionality
     # of the train_x, which is n_centroids * 4 dimensions (12000), because of the pooling
     # It says something like 300 minutes to train 100 iterations
+    # After PCA, takes about 15 minutes on 15% of the dataset with 1200 features
+    # But RMSE is .20
+    wrapper = ModelWrapper(GradientBoostingRegressor, {'verbose': 2}, n_jobs=1)
+
+    # SVR takes about 30 minutes on 15% of the sample, and score is .19 on 0th class, compared to .15 on RidgeRFE
+    # Didn't Scale/Center, so maybe need to do that?
+    wrapper = ModelWrapper(SVR, {}, n_jobs=1)
+    scale = MinMaxScaler((-1, 1))
+    scaled_train_x = scale.fit_transform(train_x)
+
     wrapper.grid_search(train_x, train_y[:, 0], params, sample=0.3, refit=False)
+
+    wrapper.cross_validation(train_x, train_y[:, 0], params, sample=0.3)
