@@ -60,7 +60,6 @@ def central_pixel_benchmark(outfile="sub_central_pixel_001.csv"):
 
 def random_forest_001(outfile="sub_random_forest_001.csv", n_jobs=1):
     """
-    First attempt at implementing a neural network.
     Uses a sample of central pixels in RGB space to feed in as inputs to the neural network
 
     # 3-fold CV using half the training set reports RMSE of .126 or so

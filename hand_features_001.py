@@ -6,10 +6,12 @@ import os
 import itertools
 import joblib
 from joblib import Parallel
+import models
 from skimage.morphology import disk
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.externals.joblib import delayed
 from classes import ImageIteratorMixin, logger, RawImage, train_solutions, chunks
+import classes
 from constants import TRAIN_IMAGE_PATH, TEST_IMAGE_PATH
 import numpy as np
 
@@ -114,3 +116,14 @@ def hand_features_001():
     ), force_rerun=True, n_jobs=5, verbose=3)
 
     train_x = extractor.transform()
+    train_y = classes.train_solutions.data
+
+    mdl = models.Base.ModelWrapper(models.Ridge.RidgeRFEstimator, {
+        'alpha': 14,
+        'n_estimators': 200,
+        'verbose': 3,
+        'oob_score': True
+    }, n_jobs=-1)
+
+    # .129 RMSE, really not much better than the pixel sampling
+    mdl.cross_validation(train_x, train_y, sample=0.5, n_folds=2)

@@ -87,6 +87,7 @@ def gradient_boosting_grid_search():
 
     # SVR takes about 30 minutes on 15% of the sample, and score is .19 on 0th class, compared to .15 on RidgeRFE
     # Didn't Scale/Center, so maybe need to do that?
+    # After scaling to -1, 1, still same RMSE
     wrapper = ModelWrapper(SVR, {}, n_jobs=1)
     scale = MinMaxScaler((-1, 1))
     scaled_train_x = scale.fit_transform(train_x)
