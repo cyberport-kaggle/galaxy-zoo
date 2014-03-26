@@ -263,7 +263,7 @@ def normalize(x):
     return temp1 / temp2
 
 
-def chunked_extract_features(idx, X, rf_size, centroids, mean, p, whitening=True, stride_size=1):
+def chunked_extract_features(idx, X, rf_size, centroids, mean, p, whitening=True, stride_size=1, pool_method='sum'):
     """
     Receives a list of image indices to extract features from
 
@@ -325,10 +325,17 @@ def chunked_extract_features(idx, X, rf_size, centroids, mean, p, whitening=True
         # Pooling
         halfr = int(np.rint(prows / 2))
         halfc = int(np.rint(pcols / 2))
-        q1 = np.sum(patches[0:halfr, 0:halfc, :], (0, 1))
-        q2 = np.sum(patches[halfr:, 0:halfc, :], (0, 1))
-        q3 = np.sum(patches[0:halfr, halfc:, :], (0, 1))
-        q4 = np.sum(patches[halfr:, halfc:, :], (0, 1))
+        if pool_method == 'sum':
+            func = np.sum
+        elif pool_method == 'max':
+            func = np.max
+        elif pool_method == 'mean':
+            func = np.mean
+
+        q1 = func(patches[0:halfr, 0:halfc, :], (0, 1))
+        q2 = func(patches[halfr:, 0:halfc, :], (0, 1))
+        q3 = func(patches[0:halfr, halfc:, :], (0, 1))
+        q4 = func(patches[halfr:, halfc:, :], (0, 1))
 
         res[i] = np.hstack((q1.flatten(), q2.flatten(), q3.flatten(), q4.flatten()))
 
@@ -565,7 +572,7 @@ class PatchSampler(BaseEstimator, TransformerMixin):
 
 
 class KMeansFeatureGenerator(BaseEstimator, TransformerMixin):
-    def __init__(self, n_centroids, rf_size, result_path, n_iterations=20, n_init=1, n_jobs=1, verbose=3, force_rerun=False, method='spherical'):
+    def __init__(self, n_centroids, rf_size, result_path, n_iterations=20, n_init=1, n_jobs=1, verbose=3, force_rerun=False, method='spherical', pool_method='sum'):
         self.n_centroids = n_centroids
         self.rf_size = rf_size
         self.n_iterations = n_iterations
@@ -577,6 +584,7 @@ class KMeansFeatureGenerator(BaseEstimator, TransformerMixin):
         if method not in ['spherical', 'minibatch']:
             raise RuntimeError("Method must be spherical or minibatch.  Got {}".format(method))
         self.method = method
+        self.pool_method = pool_method
 
     def whiten(self, X):
         cov = np.cov(X, rowvar=0)
@@ -627,7 +635,7 @@ class KMeansFeatureGenerator(BaseEstimator, TransformerMixin):
             chunked_rows = list(chunks(all_rows, self.n_jobs))
             logger.info("Transforming in {} jobs, chunk sizes: {}".format(self.n_jobs, [len(x) for x in chunked_rows]))
             res = Parallel(n_jobs=self.n_jobs, verbose=self.verbose)(
-                delayed(chunked_extract_features)(i, X, self.rf_size, self.centroids_, self.mean_, self.p_, True, stride_size) for i in chunked_rows
+                delayed(chunked_extract_features)(i, X, self.rf_size, self.centroids_, self.mean_, self.p_, True, stride_size, self.pool_method) for i in chunked_rows
             )
             res = np.vstack(res)
             if save_to_file is not None:
