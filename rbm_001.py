@@ -1,8 +1,9 @@
 from sklearn.neural_network import BernoulliRBM
 from sklearn.preprocessing import MinMaxScaler
 from classes import logger
+import classes
 import models
-from models.Base import CropScaleImageTransformer
+from models.Base import CropScaleImageTransformer, ModelWrapper
 
 
 def rbm_001():
@@ -22,12 +23,17 @@ def rbm_001():
                                                          patch_size=rf_size,
                                                          n_jobs=-1)
     images = train_x_crop_scale.transform()
-
-    patches = patch_extractor.transform(images)
+    images = images.reshape((images.shape[0], 15 * 15 * 3))
 
     # rbm needs inputs to be between 0 and 1
     scaler = MinMaxScaler()
-    patches = scaler.fit_transform(patches)
+    images = scaler.fit_transform(images)
 
     rbm = BernoulliRBM(verbose=1)
-    rbm.fit(patches)
+    rbm.fit(images)
+
+    train_x = rbm.transform(images)
+    train_y = classes.train_solutions.data
+
+    wrapper = ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 500, 'n_estimators': 500}, n_jobs=-1)
+    wrapper.cross_validation(train_x, train_y, sample=0.5, parallel_estimator=True)
