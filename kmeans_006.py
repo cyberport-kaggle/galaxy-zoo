@@ -176,6 +176,9 @@ def kmeans_006_colwise_rmse():
 
 
 def kmeans_006_submission():
+    # 2014-03-28 10:53:22 - Base - INFO - Cross validation completed in 1487.18687487.  Scores:
+    # 2014-03-28 10:53:22 - Base - INFO - [-0.11018943 -0.10946863]
+
     # Final submission
     crop = 150
     s = 15
@@ -192,6 +195,7 @@ def kmeans_006_submission():
     gc.collect()
 
     wrapper = ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 500, 'n_estimators': 500}, n_jobs=-1)
+    # wrapper.cross_validation(train_x, train_y, sample=0.5, parallel_estimator=True)
     wrapper.fit(train_x, train_y)
 
     test_x_crop_scale = CropScaleImageTransformer(training=False,

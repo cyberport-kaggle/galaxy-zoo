@@ -320,6 +320,7 @@ def chunked_extract_features(idx, X, rf_size, centroids, mean, p, whitening=True
 
         prows = pcols = int((this_x.shape[0] - rf_size) / stride_size) + 1
         num_centroids = centroids.shape[0]
+        # (patch size - rf size + 1, num_centroids), so 11, 11, 3000
         patches = patches.reshape((prows, pcols, num_centroids))
 
         # Pooling
@@ -571,6 +572,17 @@ class PatchSampler(BaseEstimator, TransformerMixin):
         return np.vstack(res)
 
 
+def whiten(X):
+    cov = np.cov(X, rowvar=0)
+    mean = X.mean(0, keepdims=True)
+    d, v = np.linalg.eig(cov)
+    p = np.dot(v,
+               np.dot(np.diag(np.sqrt(1 / (d + 0.1))),
+                      v.T))
+    res = np.dot(X - mean, p)
+    return res, mean, p
+
+
 class KMeansFeatureGenerator(BaseEstimator, TransformerMixin):
     def __init__(self, n_centroids, rf_size, result_path, n_iterations=20, n_init=1, n_jobs=1, verbose=3, force_rerun=False, method='spherical', pool_method='sum'):
         self.n_centroids = n_centroids
@@ -586,16 +598,6 @@ class KMeansFeatureGenerator(BaseEstimator, TransformerMixin):
         self.method = method
         self.pool_method = pool_method
 
-    def whiten(self, X):
-        cov = np.cov(X, rowvar=0)
-        mean = X.mean(0, keepdims=True)
-        d, v = np.linalg.eig(cov)
-        p = np.dot(v,
-                   np.dot(np.diag(np.sqrt(1 / (d + 0.1))),
-                          v.T))
-        res = np.dot(X - mean, p)
-        return res, mean, p
-
     def fit(self, X, y=None):
         if os.path.exists(self.result_path + '_centroids.npy') and not self.force_rerun:
             self.load_from_file()
@@ -603,7 +605,7 @@ class KMeansFeatureGenerator(BaseEstimator, TransformerMixin):
             logger.info("Normalizing")
             norm_x = normalize(X)
             logger.info("Whitening")
-            res, self.mean_, self.p_ = self.whiten(norm_x)
+            res, self.mean_, self.p_ = whiten(norm_x)
             logger.info("Clustering")
             # self.centroids_ = spherical_kmeans(res, self.n_centroids, self.n_iterations)
             if self.method == "spherical":
