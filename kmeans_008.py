@@ -3,6 +3,7 @@ Tuning for max pooling and other factors
 """
 from __future__ import division
 import gc
+from sklearn.linear_model import Ridge
 from sklearn.preprocessing import StandardScaler
 import classes
 import models
@@ -139,6 +140,9 @@ def rf_size_10():
 
 
 def extratress():
+    # 2014-03-28 13:24:22 - Base - INFO - Cross validation completed in 1139.1731801.  Scores:
+    # 2014-03-28 13:24:22 - Base - INFO - [-0.11048638 -0.11060714]
+
     crop = 150
     s = 15
     n_centroids = 3000
@@ -156,6 +160,68 @@ def extratress():
 
     wrapper = ModelWrapper(models.Ridge.RidgeExtraTreesEstimator, {'alpha': 500, 'n_estimators': 500}, n_jobs=-1)
     wrapper.cross_validation(train_x, train_y, sample=0.5, parallel_estimator=True)
+
+
+def extra_trees_submission():
+    # Somehow the submission on the leaderboard scores 0.22
+    crop = 150
+    s = 15
+    n_centroids = 3000
+
+    images = get_images(crop=crop, s=s)
+    kmeans_generator = train_kmeans_generator(images, n_centroids=n_centroids)
+
+    train_x = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_006_centroids_{}.npy'.format(n_centroids), memmap=True)
+    train_y = classes.train_solutions.data
+
+    # Unload some objects
+    del images
+    gc.collect()
+
+    wrapper = ModelWrapper(models.Ridge.RidgeExtraTreesEstimator, {'alpha': 500, 'n_estimators': 500}, n_jobs=-1)
+    # wrapper.cross_validation(train_x, train_y, sample=0.5, parallel_estimator=True)
+    wrapper.fit(train_x, train_y)
+
+    test_x_crop_scale = CropScaleImageTransformer(training=False,
+                                                  result_path='data/data_test_crop_{}_scale_{}.npy'.format(crop, s),
+                                                  crop_size=crop,
+                                                  scaled_size=s,
+                                                  n_jobs=-1,
+                                                  memmap=True)
+
+    test_images = test_x_crop_scale.transform()
+    test_x = kmeans_generator.transform(test_images, save_to_file='data/data_test_kmeans_features_006_centroids_{}.npy'.format(n_centroids), memmap=True)
+    res = wrapper.predict(test_x)
+    sub = classes.Submission(res)
+    sub.to_file('sub_kmeans_008.csv')
+
+
+def ensemble():
+    crop = 150
+    s = 15
+    n_centroids = 3000
+
+    images = get_images(crop=crop, s=s)
+    kmeans_generator = train_kmeans_generator(images, n_centroids=n_centroids)
+
+    train_x = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_006_centroids_{}.npy'.format(n_centroids), memmap=True)
+    train_y = classes.train_solutions.data
+
+    # Unload some objects
+    del images
+    gc.collect()
+
+    wrapper1 = ModelWrapper(models.Ridge.RidgeExtraTreesEstimator, {'alpha': 500, 'n_estimators': 500}, n_jobs=-1)
+    wrapper1.fit(train_x, train_y)
+
+    wrapper2 = ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 500, 'n_estimators': 500}, n_jobs=-1)
+    wrapper2.fit(train_x, train_y)
+
+    pred1 = wrapper1.predict(train_x)
+    pred2 = wrapper2.predict(train_x)
+    wrapper3 = ModelWrapper(Ridge)
+    wrapper3.cross_validation(np.vstack((pred1, pred2)), train_y)
+
 
 
 def second_layer_kmeans():
