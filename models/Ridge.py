@@ -1,6 +1,6 @@
 import inspect
 from sklearn.base import BaseEstimator
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
 from sklearn.linear_model import Ridge
 from models.Base import BaseModel
 
@@ -89,6 +89,12 @@ class RidgeRFEstimator(BaseEstimator):
         self._check_fitted()
         ridge_y = self.ridge_estimator_.predict(X)
         return self.rf_estimator_.predict(ridge_y)
+
+
+class RidgeExtraTreesEstimator(RidgeRFEstimator):
+    def _get_rf_model(self):
+        init_args = self._populate_args(ExtraTreesRegressor)
+        return ExtraTreesRegressor(**init_args)
 
 
 class RidgeRFModel(BaseModel):

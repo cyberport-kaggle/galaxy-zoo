@@ -1,11 +1,14 @@
 """
 Tuning for max pooling and other factors
 """
+from __future__ import division
 import gc
+from sklearn.preprocessing import StandardScaler
 import classes
 import models
 from models.Base import CropScaleImageTransformer, ModelWrapper
 from models.KMeansFeatures import KMeansFeatureGenerator, normalize, whiten
+import numpy as np
 
 
 def get_images(crop=150, s=15):
@@ -47,7 +50,7 @@ def max_pooling():
     n_centroids = 3000
 
     images = get_images(crop=crop, s=s)
-    kmeans_generator = train_kmeans_generator(images, n_centroids=n_centroids)
+    kmeans_generator = train_kmeans_generator(images, n_centroids=n_centroids, pool_method='max')
 
     # Need something larger than the 15G RAM, since RAM usage seems to spike when recombining from parallel
     train_x = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_008_maxpool.npy', memmap=True)
@@ -62,6 +65,9 @@ def max_pooling():
 
 
 def mean_pooling():
+    # Wow mean pooling is really bad
+    # 2014-03-28 11:28:42 - Base - INFO - Cross validation completed in 1523.09399891.  Scores:
+    # 2014-03-28 11:28:42 - Base - INFO - [-0.13083991 -0.12989765]
     crop = 150
     s = 15
     n_centroids = 3000
@@ -69,7 +75,6 @@ def mean_pooling():
     images = get_images(crop=crop, s=s)
     kmeans_generator = train_kmeans_generator(images, n_centroids=n_centroids, pool_method='mean')
 
-    # Need something larger than the 15G RAM, since RAM usage seems to spike when recombining from parallel
     train_x = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_008_meanpool.npy', memmap=True)
     train_y = classes.train_solutions.data
 
@@ -78,6 +83,78 @@ def mean_pooling():
     gc.collect()
 
     wrapper = ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 500, 'n_estimators': 500}, n_jobs=-1)
+    wrapper.cross_validation(train_x, train_y, sample=0.5, parallel_estimator=True)
+
+
+def rf_size_10():
+    # Pretty bad as well
+    # 2014-03-28 13:04:07 - Base - INFO - Cross validation completed in 1475.74401999.  Scores:
+    # 2014-03-28 13:04:07 - Base - INFO - [-0.12217214 -0.12209735]
+
+    n_centroids = 3000
+    s = 15
+    crop = 150
+    n_patches = 400000
+    rf_size = 5
+
+    train_x_crop_scale = CropScaleImageTransformer(training=True,
+                                                   result_path='data/data_train_crop_{}_scale_{}.npy'.format(crop, s),
+                                                   crop_size=crop,
+                                                   scaled_size=s,
+                                                   n_jobs=-1,
+                                                   memmap=True)
+    test_x_crop_scale = CropScaleImageTransformer(training=False,
+                                                  result_path='data/data_test_crop_{}_scale_{}.npy'.format(crop, s),
+                                                  crop_size=crop,
+                                                  scaled_size=s,
+                                                  n_jobs=-1,
+                                                  memmap=True)
+
+    kmeans_generator = KMeansFeatureGenerator(n_centroids=n_centroids,
+                                              rf_size=rf_size,
+                                              result_path='data/mdl_kmeans_008_rf10'.format(n_centroids),
+                                              n_iterations=20,
+                                              n_jobs=-1,)
+
+    patch_extractor = models.KMeansFeatures.PatchSampler(n_patches=n_patches,
+                                                         patch_size=rf_size,
+                                                         n_jobs=-1)
+    images = train_x_crop_scale.transform()
+
+    patches = patch_extractor.transform(images)
+
+    kmeans_generator.fit(patches)
+
+    del patches
+    gc.collect()
+
+    train_x = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_008_rf10.npy'.format(n_centroids), memmap=True)
+    train_y = classes.train_solutions.data
+
+    del images
+    gc.collect()
+
+    wrapper = ModelWrapper(models.Ridge.RidgeRFEstimator, {'alpha': 500, 'n_estimators': 500}, n_jobs=-1)
+    wrapper.cross_validation(train_x, train_y, sample=0.5, parallel_estimator=True)
+
+
+def extratress():
+    crop = 150
+    s = 15
+    n_centroids = 3000
+
+    images = get_images(crop=crop, s=s)
+    kmeans_generator = train_kmeans_generator(images, n_centroids=n_centroids, pool_method='sum')
+
+    # Need something larger than the 15G RAM, since RAM usage seems to spike when recombining from parallel
+    train_x = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_006_centroids_{}.npy'.format(n_centroids), memmap=True)
+    train_y = classes.train_solutions.data
+
+    # Unload some objects
+    del images
+    gc.collect()
+
+    wrapper = ModelWrapper(models.Ridge.RidgeExtraTreesEstimator, {'alpha': 500, 'n_estimators': 500}, n_jobs=-1)
     wrapper.cross_validation(train_x, train_y, sample=0.5, parallel_estimator=True)
 
 
@@ -90,5 +167,40 @@ def second_layer_kmeans():
     kmeans_generator = train_kmeans_generator(images, n_centroids=n_centroids)
 
     # n_images, 12000
-    x_l1 = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_006_centroids_{}.npy'.format(n_centroids), memmap=True)
+    x_l1 = kmeans_generator.transform(images, save_to_file='data/data_kmeans_features_006_centroids_{}.npy'.format(n_centroids), memmap=False)
     # train_y = classes.train_solutions.data
+
+    # Normalize each column
+    scaler = StandardScaler()
+    x_l1 = scaler.fit_transform(x_l1)
+
+    # Whiten
+    # This is really really slow
+    cov = np.cov(x_l1, rowvar=0)
+    mean = x_l1.mean(0, keepdims=True)
+    d, v = np.linalg.eig(cov)
+    p = np.dot(v,
+               np.dot(np.diag(np.sqrt(1 / (d + 0.1))),
+                      v.T))
+    res = np.dot(x_l1 - mean, p)
+
+
+# This still takes a long time, can parallelize, but still will take a long time.  Also, not sure that I'm
+# doing this correctly, since the paper says that the formulas need to be expanded and the values can be
+# accumulated just once
+def get_energies(X):
+    energies = np.zeros((X.shape[1], X.shape[1]))
+    for k in xrange(X.shape[1]):
+        print k
+        for j in xrange(k+1, X.shape[1]):
+            xk = X[:, k]
+            xj = X[:, j]
+            corr = np.corrcoef(xk, xj)[0, 1]
+            beta = (1 - corr) ** (-1/2)
+            gamma = (1 + corr) ** (-1/2)
+            xjhat = 0.5 * ((gamma + beta) * xj) + ((gamma - beta) * xk)
+            xkhat = 0.5 * ((gamma - beta) * xj) + ((gamma + beta) * xk)
+            denom = np.sqrt(np.sum((xjhat ** 4) - 1) * np.sum((xkhat ** 4) - 1))
+            energy = (np.sum(np.multiply(xkhat ** 2, xjhat **2)) - 1) / denom
+            energies[k, j] = energy
+            energies[j, k] = energy
