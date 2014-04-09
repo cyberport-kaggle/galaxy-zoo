@@ -309,7 +309,6 @@ def chunked_extract_features(idx, X, rf_size, centroids, mean, p, whitening=True
         if whitening:
             patches = np.dot(patches - mean, p)
 
-        # Normalizing
         xx = np.sum(patches ** 2, 1, keepdims=True)
         cc = np.sum(centroids ** 2, 1, keepdims=True).T
         xc = np.dot(patches, centroids.T)

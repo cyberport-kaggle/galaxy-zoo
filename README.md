@@ -1,41 +1,67 @@
-# galaxy-zoo
+# Kaggle Galaxy Zoo - Shallow Learners submission
 
-## Next TODOs
+## Final Submission
 
-  - Implement parallelization in do_for_each_image
-  - Implement cascade training - training classes in sequence and feeding the results of earlier classes into the models for later classes
-  - Grid search on ExtraTreesModel
+See `final_submission.py` for the code to run the final submission.  The cross validation score
+for the model was about .106, and the leaderboard score was .104.
 
+### Workspace setup
 
-## Current Models
+ - Ensure that a folder `data` exists
+ - Ensure that the training images are extracted to `images_training_rev1` under `data`
+ - Ensure that the test images are extracted to `images_test_rev1` under `data
 
-### Central Pixel Clustering Benchmark
+### Overview of model
 
-### Ridge Regression
+Our final model is a single layer K-means feature learner for generating features, which are then used in a
+ridge regression / random forest predictor.  Our feature learning followed the procedure outlined in
+[this paper](http://www.stanford.edu/~acoates/papers/coatesng_nntot2012.pdf) by
+[Adam Coates](http://www.stanford.edu/~acoates/) and Andrew Ng of Stanford.
 
-### Random Forest Regression
+The full model runs in under two hours on a hi1.4xlarge AWS instance (16 cores, 60.5 GB RAM).
 
+In pseudocode, the overall pipeline looks like this:
 
-## Current Feature sets
+ - Crop images to 150x150, then scale to 15x15 (keep RGB channels)
+ - From the training images, extract 400,000 5x5 image patches
+ - Normalize and whiten the patches
+ - Fit k-means on the image patches with 3,000 centroids
+ - For each training image, and for each 5x5 patch in the image (the "window"), generate the features:
 
-### Sampled Pixels around center
+   - Normalize and whiten the window
+   - Use a soft threshold to encode the window with the centroids
+   - Pool the encoded features over the quadrants of the image
 
-## Ideas
+ - Use the 12,000 features (3,000 centroids x 4 quadrants) to train a ridge regressor on all 37 response columns
+ - Use the predictions from the ridge regressor to train a random forest on all 37 response columns
+ - On the test data, repeat the feature generation process
+ - Predict using the ridge regressor and random forest
 
-### Training methods
+We experimented briefly with alternative predictors at the end of the pipeline with little success.  We
+mostly used ridge regression because of it's built-in ability to handled multi-class outputs.  We then
+used the random forest to account for correlations among response columns.
 
- - Training by class - Instead of training all 37 response columns at once, train each class separately.
- - Normalize class probability sums to 1 - Because of the structure of the Galaxy Zoo tree, each row's class sums
- are different (except for classes 1, and 6, which sum to 1 for all rows).  Instead of using the raw numbers, scale
- the classes such that they always sum to 1
- - Feed parent class predictions to children classes - Follow the hierarchy of the Galaxy Zoo tree structure.  For example,
- Feed the prediction for Class 1.1 into the model for Class 7.  Not sure if this should be paired with the normalization above.
+### Tuning parameters
 
-### Data preprocessing / Feature generation
+We experimented with the following parameters in order to arrive at our final settings:
 
- - Unsupervised feature learning - http://ufldl.stanford.edu/wiki/index.php/UFLDL_Tutorial
- - K-means clustering for feature learning - Research from the Stanford group suggests that k-means can be just as effective
- as more complicated unsupervised feature learning techniques in generating features
- - Whitening - Something called ZCA that is apparently critical to improving the accuracy of k-means for feature generation:
- http://ufldl.stanford.edu/wiki/index.php/Whitening and http://ufldl.stanford.edu/wiki/index.php/Exercise:PCA_and_Whitening
+  - Crop size
+  - Scale size
+  - Number of patches to extract
+  - Patch size
+  - Using test images in patch extraction
+  - Number of centroids
+  - Step size when extracting windows from images
+  - Pooling methodology
 
+We initially had really bad performance with the raw images because the patches were not large enough
+to pick up any meaningful features.  Cropping and scaling was critical to significantly improving the
+performance of the feature generator.  However, given the small scaling, we worried that we were losing too
+much fidelity and tried increasing the scale size, but quickly ran into processing constraints.
+
+Increasing the number of centroids was one of the more important tuning factors.
+
+### Next steps
+
+It is possible to stack the kmeans feature generators as you would with a deep learning network, but we
+ran out of time before we could implement it.
